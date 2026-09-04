@@ -2,6 +2,10 @@ extern/steamworks
 mods/
 build/
 build_kde/
+build-vs/
+/SDL-release-3.4.4/
+.vs/
+*.dmp
 html/
 obj-*/
 .cache/
