@@ -39,7 +39,9 @@ only relevant if actually working with mingw.
 no MinGW involved. `CMakeLists.txt` on `WIN32`:
 - vendors SDL3 from source via `add_subdirectory` — expects the SDL3 source tree at
   `SDL-release-3.4.4/` in the repo root (not committed; drop it in yourself). SDL3's own Vulkan render
-  backend (`src/render/vulkan`) builds in, though the game doesn't use it yet (see Known issues).
+  backend (`src/render/vulkan`) builds in and is what the game actually renders through (see Rendering
+  under Architecture) — requested explicitly via `SDL_CreateRenderer(window, "vulkan")`, with an
+  automatic fallback to SDL's default driver if that fails (no Vulkan runtime present, etc.).
 - pulls OpenAL/libvorbis/libogg/libtheora/cURL/zlib from vcpkg via `$ENV{VCPKG_ROOT}`'s toolchain file
   (classic mode, `x64-windows` triplet) — set `VCPKG_ROOT` before configuring.
 - excludes `steam_*.cpp` except `steam_input.cpp`/`steam_achievements.cpp`, which compile without the
@@ -54,9 +56,29 @@ Configure/build:
 cmake -S . -B build-vs -G "Visual Studio 18 2026" -A x64 -T ClangCL
 cmake --build build-vs --target keeper --config RelWithDebInfo -- /m
 ```
-Run from the repo root (needs `data_free/` etc. relative to CWD) with `SDL3.dll` and the vcpkg DLLs
-(`OpenAL32.dll`, `libcurl.dll`, `zlib1.dll`, `vorbis*.dll`, `ogg.dll`, `theoradec.dll`) next to `keeper.exe`
-— copy them from `build-vs/SDL-release-3.4.4/RelWithDebInfo/` and `$VCPKG_ROOT/installed/x64-windows/bin/`.
+CMake `GLOB`-based source discovery (see above) doesn't notice added/removed `.cpp` files without a fresh
+configure — re-run the `cmake -S ... -B build-vs ...` line (not just `cmake --build`) after adding or
+deleting a root-level source file.
+
+The exe lands at `build-vs/<Config>/keeper.exe` (e.g. `build-vs/RelWithDebInfo/keeper.exe`). It needs
+`SDL3.dll` and the vcpkg DLLs (`OpenAL32.dll`, `libcurl.dll`, `zlib1.dll`, `vorbis*.dll`, `ogg.dll`,
+`theoradec.dll`) sitting next to it — DLLs are always resolved relative to the exe's own location,
+regardless of working directory. **There is no CMake step that copies these** — on this checkout they were
+copied in once by hand into `build-vs/RelWithDebInfo/` when the build was first set up (from
+`build-vs/SDL-release-3.4.4/RelWithDebInfo/` and `$VCPKG_ROOT/installed/x64-windows/bin/`), and they simply
+survive incremental rebuilds since `cmake --build` only rebuilds changed targets rather than cleaning the
+output directory. After a from-scratch `build-vs` (deleted directory, different `Config`, etc.) they need
+copying in again by hand the same way.
+
+Game *data* (`data_free/`, `data_contrib/`, saves, mod files, `appconfig.txt`) is resolved relative to the
+process's **working directory**, not the exe's location — separately from the DLL lookup above. Running
+`keeper.exe` from the repo root uses this checkout's own `data_free/`. `run-against-steam.ps1` (repo root,
+untracked/local — not part of the committed build) instead launches the checkout-built exe with its working
+directory pointed at a local Steam install of the game, so it runs against the full shipped asset set rather
+than whatever subset is checked into this repo; useful when tracking down a rendering/asset bug, since dev
+data can be thinner than the real game's. It also auto-copies `appconfig-dev.txt` into the Steam dir the
+first time it's needed — non-`RELEASE` builds (`RelWithDebInfo`/`Debug`) read that filename instead of the
+shipped `appconfig.txt` (see `main.cpp`'s `#ifdef RELEASE`), and a bare Steam install won't have it.
 
 **CMake on Linux** is a separate, mostly-untouched path; it hardcodes some author-specific paths
 (`/home/michal/...`) so expect to need overrides. Not affected by the WIN32-only changes above.
@@ -93,13 +115,39 @@ dungeon population or an enemy faction) — most "dungeon management" gameplay l
 immigration, warnings) hangs off `Collective` and its `CollectiveConfig`/`CollectiveControl`.
 
 **View layer is abstracted from game logic.** `View` (`view.h`) is the interface the game engine talks to;
-`WindowView` (`window_view.h`) is the real renderer — SDL3 (see Building) driving raw, fixed-function
-OpenGL calls (`glBegin`/`glVertex`/`glColor`/`glTexCoord` in `renderer.cpp`/`opengl.cpp`, no shaders, no
-VBOs) via `SDL_GL_CreateContext`, not SDL3's own `SDL_Renderer`/Vulkan backend. `DummyView` (`dummy_view.h`) is a
+`WindowView` (`window_view.h`) is the real renderer. `DummyView` (`dummy_view.h`) is a
 headless/no-op implementation used for tests and batch/automated runs (e.g. `MainLoop::modelGenTest`,
 `battleTest`, `launchQuickGame` in `main_loop.h` — these run full games without a display, useful for
 balance/regression testing of generated content). `Renderer` (`renderer.h`) and the `fx_*` files handle
 low-level drawing and particle effects; `layout_renderer.h` handles UI layout.
+
+**Rendering (Windows build): SDL3's `SDL_Renderer` 2D API, Vulkan backend.** `renderer.cpp` draws
+exclusively through `SDL_RenderGeometry`/`SDL_RenderTexture`/etc — no raw OpenGL calls anywhere in this
+checkout (the old `opengl.cpp`/`framebuffer.cpp` fixed-function/FBO path was fully removed). A few things
+that are easy to get wrong if you touch this code:
+  - `SDL_Renderer` has no depth buffer, so there's no way to make something "always draw on top" by giving
+    it a different z like the old GL code did. `Renderer::setTopLayer()`/`popLayer()` (used for tooltips
+    and similar always-on-top UI) instead defer every draw call issued while a top layer is active into a
+    command queue (`Renderer::runOrDefer`), replayed once at the very end of the frame in
+    `drawAndClearBuffer()` — after everything else. If you add a new kind of draw call to `Renderer`, route
+    it through `runOrDefer` too or it'll ignore top-layer nesting.
+  - `SDL_RenderGeometry`/`SDL_RenderGeometryRaw` with `texture == nullptr` (solid-color fills — see
+    `Renderer`'s `fillQuad` helper) blend using the *renderer's own* draw blend mode
+    (`SDL_SetRenderDrawBlendMode`), not per-vertex alpha or anything texture-related. It's set to
+    `SDL_BLENDMODE_BLEND` once, in the `Renderer` constructor — don't assume alpha "just works" for
+    untextured geometry the way it does for sprites.
+  - `SDL_CreateTextureFromSurface` copies the *source `SDL_Surface`'s own* blend mode onto the resulting
+    texture (in `SDL_UpdateTextureFromSurface`), silently overriding its own format-based auto-detection.
+    `TileSet::loadTilesFromDir` builds its sprite atlas by `SDL_BlitSurface`-ing individual tile PNGs into
+    one big surface with `SDL_SetSurfaceBlendMode(..., SDL_BLENDMODE_NONE)` (deliberately, so tiles get
+    copied verbatim rather than alpha-composited into each other during that CPU-side step) — `Texture`'s
+    loading path explicitly force-sets `SDL_BLENDMODE_BLEND` on the GPU texture afterward to counteract
+    this. Any new code path that creates a `Texture` from a hand-built `SDL_Surface` needs the same
+    explicit override, or sprites drawn from it will silently render fully opaque.
+  - Textures default to `SDL_TEXTURE_ADDRESS_CLAMP` (`Texture::Wrapping::clamp`), not `WRAP` — `WRAP`
+    addressing is only well-defined for power-of-two-sized textures on some backends
+    (`SDL_PROP_RENDERER_TEXTURE_WRAPPING_BOOLEAN`), and nothing in this codebase actually needs true
+    tiling for sprite/tile-atlas sub-rect sampling.
 
 **`MainLoop`** (`main_loop.h`/`.cpp`) is the top-level orchestrator invoked from `main.cpp`: menu flow, save/
 load, campaign setup, mod downloading, and the various headless test/battle-simulation entry points all live
@@ -132,11 +180,6 @@ those as bugs to fix opportunistically.
 
 ## Known issues (Windows/CMake/SDL3 build)
 
-- **Rendering is still OpenGL, not Vulkan.** The SDL2→SDL3 migration (headers, surfaces, events, keycodes,
-  audio) is done and the build links against SDL3's Vulkan-capable renderer, but `renderer.cpp`/`opengl.cpp`
-  still talk to raw fixed-function OpenGL directly, not `SDL_Renderer`. Switching to Vulkan means routing
-  those draw calls (`glBegin(GL_QUADS)`/`glDrawArrays` etc.) through `SDL_RenderGeometry`/`SDL_RenderTexture`
-  instead, then requesting the `"vulkan"` driver — not yet started.
 - **Crash handler assumes gdb/Linux.** `main.cpp`'s `keeperMain` install a `FatalLog` output that on a
   `FATAL`/`CHECK` failure shells out to `rungdb.bat` to capture a backtrace. That script doesn't exist on
   Windows, so a failed `CHECK` crashes a second time (access violation) instead of printing a clean
