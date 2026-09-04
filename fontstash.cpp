@@ -21,6 +21,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h> /* @rlyeh: floorf() */
+#include <vector>
 
 //#include <GL/glew.h>  /* @rlyeh: before including GL. doesnt hurt and makes life better */
 
@@ -29,8 +30,26 @@
 #include "stb_truetype.h"
 
 #include "fontstash.h"
+#include "debug.h"
 
 using namespace SDL;
+
+static SDL_FColor toFColor(Color color) {
+  return SDL_FColor{(float)color.r / 255, (float)color.g / 255, (float)color.b / 255, (float)color.a / 255};
+}
+
+// The glyph atlas used to be an alpha-only GL_ALPHA texture, modulated by the current draw color
+// via fixed-function GL_MODULATE. SDL_RenderGeometry only modulates by full RGBA, so instead we
+// keep the atlas as opaque-white-RGB + coverage-as-alpha, and let per-vertex color do the tinting.
+static SDL_Texture* createAtlasTexture(int w, int h, const Uint8* rgba) {
+  SDL_Texture* tex = SDL_CreateTexture(keeperrlRenderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STREAMING, w, h);
+  if (!tex)
+    return nullptr;
+  SDL_SetTextureScaleMode(tex, SDL_SCALEMODE_LINEAR);
+  SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
+  SDL_UpdateTexture(tex, nullptr, rgba, w * 4);
+  return tex;
+}
 
 
 #define HASH_LUT_SIZE 256
@@ -94,7 +113,7 @@ struct sth_font
 
 struct sth_texture
 {
-	GLuint id;
+	SDL_Texture* id;
 	// TODO: replace rows with pointer
 	struct sth_row rows[MAX_ROWS];
 	int nrows;
@@ -107,11 +126,12 @@ struct sth_stash
 {
 	int tw,th;
 	float itw,ith;
-	GLubyte *empty_data;
+	Uint8 *empty_data;
 	struct sth_texture* tt_textures;
 	struct sth_texture* bm_textures;
 	struct sth_font* fonts;
 	int drawing;
+	SDL_FColor drawColor;
 };
 
 
@@ -154,7 +174,7 @@ static unsigned int decutf8(unsigned int* state, unsigned int* codep, unsigned i
 struct sth_stash* sth_create(int cachew, int cacheh)
 {
   struct sth_stash* stash = nullptr;
-  GLubyte* empty_data = nullptr;
+  Uint8* empty_data = nullptr;
   struct sth_texture* texture = nullptr;
 
 	// Allocate memory for the font stash.
@@ -162,10 +182,15 @@ struct sth_stash* sth_create(int cachew, int cacheh)
   if (stash == nullptr) goto error;
 	memset(stash,0,sizeof(struct sth_stash));
 
-	// Create data for clearing the textures
-	empty_data = (GLubyte*)malloc(cachew * cacheh);
+	// Create data for clearing the textures (RGBA: opaque white, zero coverage)
+	empty_data = (Uint8*)malloc(cachew * cacheh * 4);
   if (empty_data == nullptr) goto error;
-	memset(empty_data, 0, cachew * cacheh);
+	for (int i = 0; i < cachew * cacheh; ++i) {
+		empty_data[i*4+0] = 255;
+		empty_data[i*4+1] = 255;
+		empty_data[i*4+2] = 255;
+		empty_data[i*4+3] = 0;
+	}
 
 	// Allocate memory for the first texture
 	texture = (struct sth_texture*)malloc(sizeof(struct sth_texture));
@@ -179,15 +204,11 @@ struct sth_stash* sth_create(int cachew, int cacheh)
 	stash->ith = 1.0f/cacheh;
 	stash->empty_data = empty_data;
 	stash->tt_textures = texture;
-	glGenTextures(1, &texture->id);
+	texture->id = createAtlasTexture(cachew, cacheh, empty_data);
 	if (!texture->id) goto error;
-	glBindTexture(GL_TEXTURE_2D, texture->id);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_ALPHA, cachew, cacheh, 0, GL_ALPHA, GL_UNSIGNED_BYTE, empty_data);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
 	return stash;
-	
+
 error:
   if (stash != nullptr)
 		free(stash);
@@ -325,7 +346,7 @@ error:
 
 int sth_add_glyph_for_codepoint(struct sth_stash* stash,
                                 int idx,
-                                GLuint id,
+                                SDL_Texture* id,
                                 unsigned int codepoint,
                                 short size, short base,
                                 int x, int y, int w, int h,
@@ -389,7 +410,7 @@ int sth_add_glyph_for_codepoint(struct sth_stash* stash,
 
 inline int sth_add_glyph_for_char(struct sth_stash* stash,
                                   int idx,
-                                  GLuint id,
+                                  SDL_Texture* id,
                                   const char* s,
                                   short size, short base,
                                   int x, int y, int w, int h,
@@ -486,12 +507,8 @@ static struct sth_glyph* get_glyph(struct sth_stash* stash, struct sth_font* fnt
 						texture = texture->next;
             if (texture == nullptr) goto error;
 						memset(texture,0,sizeof(struct sth_texture));
-						glGenTextures(1, &texture->id);
+						texture->id = createAtlasTexture(stash->tw, stash->th, stash->empty_data);
 						if (!texture->id) goto error;
-						glBindTexture(GL_TEXTURE_2D, texture->id);
-						glTexImage2D(GL_TEXTURE_2D, 0, GL_ALPHA, stash->tw,stash->th, 0, GL_ALPHA, GL_UNSIGNED_BYTE, stash->empty_data);
-						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 					}
 					continue;
 				}
@@ -538,10 +555,20 @@ static struct sth_glyph* get_glyph(struct sth_stash* stash, struct sth_font* fnt
 	if (bmp)
 	{
 		stbtt_MakeGlyphBitmap(&fnt->font, bmp, gw,gh,gw, scale,scale, g);
-		// Update texture
-		glBindTexture(GL_TEXTURE_2D, texture->id);
-		glPixelStorei(GL_UNPACK_ALIGNMENT,1);
-		glTexSubImage2D(GL_TEXTURE_2D, 0, glyph->x0,glyph->y0, gw,gh, GL_ALPHA,GL_UNSIGNED_BYTE,bmp);
+		// Expand the 1-byte-per-pixel coverage bitmap into opaque-white-RGB + coverage-as-alpha,
+		// matching the atlas's RGBA format (see createAtlasTexture).
+		unsigned char* rgba = (unsigned char*)malloc(gw*gh*4);
+		if (rgba) {
+			for (int px = 0; px < gw*gh; ++px) {
+				rgba[px*4+0] = 255;
+				rgba[px*4+1] = 255;
+				rgba[px*4+2] = 255;
+				rgba[px*4+3] = bmp[px];
+			}
+			SDL_Rect updateRect{glyph->x0, glyph->y0, gw, gh};
+			SDL_UpdateTexture(texture->id, &updateRect, rgba, gw*4);
+			free(rgba);
+		}
 		free(bmp);
 	}
 	
@@ -591,20 +618,26 @@ static void flush_draw(struct sth_stash* stash)
 {
 	struct sth_texture* texture = stash->tt_textures;
 	short tt = 1;
+	static std::vector<int> indices;
 	while (texture)
 	{
 		if (texture->nverts > 0)
-		{			
-			glBindTexture(GL_TEXTURE_2D, texture->id);
-			glEnable(GL_TEXTURE_2D);
-			glEnableClientState(GL_VERTEX_ARRAY);
-			glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-			glVertexPointer(2, GL_FLOAT, VERT_STRIDE, texture->verts);
-			glTexCoordPointer(2, GL_FLOAT, VERT_STRIDE, texture->verts+2);
-			glDrawArrays(GL_QUADS, 0, texture->nverts);
-			glDisable(GL_TEXTURE_2D);
-			glDisableClientState(GL_VERTEX_ARRAY);
-			glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+		{
+			int numQuads = texture->nverts / 4;
+			indices.resize(numQuads * 6);
+			for (int q = 0; q < numQuads; ++q) {
+				indices[q*6+0] = q*4+0;
+				indices[q*6+1] = q*4+1;
+				indices[q*6+2] = q*4+2;
+				indices[q*6+3] = q*4+0;
+				indices[q*6+4] = q*4+2;
+				indices[q*6+5] = q*4+3;
+			}
+			SDL_RenderGeometryRaw(keeperrlRenderer, texture->id,
+				texture->verts, VERT_STRIDE,
+				&stash->drawColor, 0,
+				texture->verts+2, VERT_STRIDE,
+				texture->nverts, indices.data(), (int)indices.size(), 4);
 			texture->nverts = 0;
 		}
 		texture = texture->next;
@@ -616,13 +649,14 @@ static void flush_draw(struct sth_stash* stash)
 	}
 }
 
-void sth_begin_draw(struct sth_stash* stash)
+void sth_begin_draw(struct sth_stash* stash, Color color)
 {
   if (stash == nullptr)
     return;
 	if (stash->drawing)
 		flush_draw(stash);
 	stash->drawing = 1;
+	stash->drawColor = toFColor(color);
 }
 
 void sth_end_draw(struct sth_stash* stash)
@@ -783,7 +817,7 @@ void sth_delete(struct sth_stash* stash)
 		curtex = tex;
 		tex = tex->next;
 		if (curtex->id)
-			glDeleteTextures(1, &curtex->id);
+			SDL_DestroyTexture(curtex->id);
 		free(curtex);
 	}
 
@@ -792,7 +826,7 @@ void sth_delete(struct sth_stash* stash)
 		curtex = tex;
 		tex = tex->next;
 		if (curtex->id)
-			glDeleteTextures(1, &curtex->id);
+			SDL_DestroyTexture(curtex->id);
 		free(curtex);
 	}
 

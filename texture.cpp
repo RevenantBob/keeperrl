@@ -15,14 +15,14 @@
 
 #include "stdafx.h"
 #include "texture.h"
+#include "debug.h"
 
 Texture::Texture() = default;
 
 Texture::Texture(const FilePath& fileName) : path(fileName) {
   SDL::SDL_Surface* image = SDL::IMG_Load(fileName.getPath());
   CHECK(image) << SDL::IMG_GetError();
-  if (auto error = loadFromMaybe(image))
-    FATAL << "Couldn't load image: " << fileName << ". Error code " << toString(*error);
+  CHECK(loadFromMaybe(image)) << "Couldn't load image: " << fileName << ". Error: " << SDL::SDL_GetError();
   SDL::SDL_DestroySurface(image);
 }
 
@@ -37,40 +37,32 @@ Texture::Texture(const FilePath& filename, int px, int py, int w, int h) : path(
   CHECK(sub) << SDL::SDL_GetError();
   CHECK(SDL_BlitSurface(image, &src, sub, &offset)) << SDL::SDL_GetError();
   SDL::SDL_DestroySurface(image);
-  if (auto error = loadFromMaybe(sub))
-    FATAL << "Couldn't load image: " << *path << ". Error code " << toString(*error);
+  CHECK(loadFromMaybe(sub)) << "Couldn't load image: " << *path << ". Error: " << SDL::SDL_GetError();
   SDL::SDL_DestroySurface(sub);
 }
 
 Texture::Texture(Color color, int width, int height) {
   vector<Color> colors(width * height, color);
-  texId = 0;
-  SDL::glGenTextures(1, &*texId);
-  setParams(Filter::nearest, Wrapping::repeat);
-  SDL::glBindTexture(GL_TEXTURE_2D, *texId);
-  SDL::glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, colors.data());
-  CHECK_OPENGL_ERROR();
+  texId = SDL::SDL_CreateTexture(keeperrlRenderer, SDL::SDL_PIXELFORMAT_RGBA32, SDL::SDL_TEXTUREACCESS_STATIC,
+      width, height);
+  CHECK(texId) << SDL::SDL_GetError();
+  SDL::SDL_SetTextureBlendMode(texId, SDL_BLENDMODE_BLEND);
+  setParams(Filter::nearest, Wrapping::clamp);
+  CHECK(SDL::SDL_UpdateTexture(texId, nullptr, colors.data(), width * 4)) << SDL::SDL_GetError();
 
   realSize = size = Vec2(width, height);
-  SDL::glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 void Texture::setParams(Filter filter, Wrapping wrap) {
-  if (*texId) {
-    auto glFilter = filter == Filter::nearest ? GL_NEAREST : GL_LINEAR;
-    auto glWrap = wrap == Wrapping::clamp ? GL_CLAMP : GL_REPEAT;
-
-    SDL::glBindTexture(GL_TEXTURE_2D, *texId);
-    SDL::glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, glFilter);
-    SDL::glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, glFilter);
-    SDL::glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, glWrap);
-    SDL::glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, glWrap);
+  if (texId) {
+    auto scaleMode = filter == Filter::nearest ? SDL::SDL_SCALEMODE_NEAREST : SDL::SDL_SCALEMODE_LINEAR;
+    SDL::SDL_SetTextureScaleMode(texId, scaleMode);
+    addressMode = wrap == Wrapping::repeat ? SDL::SDL_TEXTURE_ADDRESS_WRAP : SDL::SDL_TEXTURE_ADDRESS_CLAMP;
   }
 }
 
 Texture::Texture(SDL::SDL_Surface* surface) {
-  if (auto error = loadFromMaybe(surface))
-    FATAL << "Error loading texture " << openglErrorCode(*error);
+  CHECK(loadFromMaybe(surface)) << "Error loading texture: " << SDL::SDL_GetError();
 }
 
 Texture::Texture(Texture&& tex) noexcept {
@@ -79,65 +71,49 @@ Texture::Texture(Texture&& tex) noexcept {
 
 Texture::~Texture() {
   if (texId)
-    SDL::glDeleteTextures(1, &*texId);
+    SDL::SDL_DestroyTexture(texId);
 }
 
 Texture& Texture::operator=(Texture&& tex) noexcept {
+  if (texId)
+    SDL::SDL_DestroyTexture(texId);
   size = tex.size;
   realSize = tex.realSize;
-  texId = std::move(tex.texId);
+  addressMode = tex.addressMode;
+  texId = tex.texId;
   path = tex.path;
-  tex.texId = none;
+  tex.texId = nullptr;
   return *this;
 }
 
 bool Texture::loadPixels(unsigned char* pixels) {
-	SDL::glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, size.x, size.y, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
-	return SDL::glGetError() == GL_NO_ERROR;
+  return SDL::SDL_UpdateTexture(texId, nullptr, pixels, (int)size.x * 4);
 }
 
-optional<SDL::GLenum> Texture::loadFromMaybe(SDL::SDL_Surface* imageOrig) {
-  if (!texId) {
-    texId = 0;
-    SDL::glGenTextures(1, &*texId);
+bool Texture::loadFromMaybe(SDL::SDL_Surface* image) {
+  if (texId) {
+    SDL::SDL_DestroyTexture(texId);
+    texId = nullptr;
   }
-  setParams(Filter::nearest, Wrapping::repeat);
-  CHECK_OPENGL_ERROR();
-  int mode = GL_RGB;
-  auto image = createPowerOfTwoSurface(imageOrig);
-  auto formatDetails = SDL::SDL_GetPixelFormatDetails(image->format);
-  if (formatDetails->bytes_per_pixel == 4) {
-    if (formatDetails->Rmask == 0x000000ff)
-      mode = GL_RGBA;
-    else
-      mode = GL_BGRA;
-  } else {
-    if (formatDetails->Rmask == 0x000000ff)
-      mode = GL_RGB;
-    else
-      mode = GL_BGR;
-  }
-  SDL::glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-  SDL::glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-  SDL::glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0);
-  SDL::glPixelStorei(GL_UNPACK_SKIP_ROWS, 0);
-  CHECK_OPENGL_ERROR();
-  SDL::glBindTexture(GL_TEXTURE_2D, *texId);
-  SDL::glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image->w, image->h, 0, mode, GL_UNSIGNED_BYTE, image->pixels);
-  size = Vec2(imageOrig->w, imageOrig->h);
-  realSize = Vec2(image->w, image->h);
-  if (image != imageOrig)
-    SDL::SDL_DestroySurface(image);
-  auto error = SDL::glGetError();
-  if (error != GL_NO_ERROR)
-    return error;
-  return none;
+  texId = SDL::SDL_CreateTextureFromSurface(keeperrlRenderer, image);
+  if (!texId)
+    return false;
+  // SDL_CreateTextureFromSurface() ends by copying the *source surface's own* blend mode onto the
+  // new texture (see SDL_UpdateTextureFromSurface() in SDL_render.c), overriding its own format-based
+  // auto-detection. Some source surfaces (e.g. TileSet's atlas, built via SDL_BlitSurface with
+  // SDL_BLENDMODE_NONE so tiles get copied verbatim instead of alpha-composited into each other) are
+  // deliberately non-blending for that CPU-side compositing step, which has nothing to do with how the
+  // resulting GPU texture should render -- force real alpha blending here regardless.
+  SDL::SDL_SetTextureBlendMode(texId, SDL_BLENDMODE_BLEND);
+  setParams(Filter::nearest, Wrapping::clamp);
+  size = realSize = Vec2(image->w, image->h);
+  return true;
 }
 
 optional<Texture> Texture::loadMaybe(const FilePath& path) {
   if (SDL::SDL_Surface* image = SDL::IMG_Load(path.getPath())) {
     Texture ret;
-    bool ok = !ret.loadFromMaybe(image);
+    bool ok = ret.loadFromMaybe(image);
     SDL::SDL_DestroySurface(image);
     if (ok) {
       ret.path = path;
@@ -147,36 +123,8 @@ optional<Texture> Texture::loadMaybe(const FilePath& path) {
   return none;
 }
 
-void Texture::addTexCoord(int x, int y) const {
-  SDL::glTexCoord2f((float)x / realSize.x, (float)y / realSize.y);
-}
-
 SDL::SDL_Surface* Texture::createSurface(int w, int h) {
   SDL::SDL_Surface* ret = SDL::SDL_CreateSurface(w, h, SDL::SDL_PIXELFORMAT_RGBA32);
   CHECK(ret) << "Failed to create surface " << w << ":" << h << ": " << SDL::SDL_GetError();
-  return ret;
-}
-
-// Some graphic cards need power of two sized textures, so we create a larger texture to contain the original one.
-SDL::SDL_Surface* Texture::createPowerOfTwoSurface(SDL::SDL_Surface* image) {
-  int w = 1;
-  int h = 1;
-  while (w < image->w)
-    w *= 2;
-  while (h < image->h)
-    h *= 2;
-  if (w == image->w && h == image->h)
-    return image;
-  auto ret = createSurface(w, h);
-  SDL::SDL_Rect dst{0, 0, image->w, image->h};
-  SDL::SDL_SetSurfaceBlendMode(image, SDL_BLENDMODE_NONE);
-  SDL_BlitSurface(image, nullptr, ret, &dst);
-  // fill the rest of the texture as well, which 'kind-of' solves the problem with repeating textures.
-  dst = {image->w, 0, 0, 0};
-  SDL_BlitSurface(image, nullptr, ret, &dst);
-  dst = {image->w, image->h, 0, 0};
-  SDL_BlitSurface(image, nullptr, ret, &dst);
-  dst = {0, image->h, 0, 0};
-  SDL_BlitSurface(image, nullptr, ret, &dst);
   return ret;
 }

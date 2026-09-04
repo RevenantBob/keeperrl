@@ -29,7 +29,8 @@
 // not enough memory
 #define STH_ENOMEM -4
 
-#include "opengl.h"
+#include "sdl.h"
+#include "color.h"
 
 struct sth_stash* sth_create(int cachew, int cacheh);
 
@@ -37,14 +38,14 @@ int sth_add_font(struct sth_stash* stash, const char* path);
 int sth_add_font_from_memory(struct sth_stash* stash, unsigned char* buffer);
 
 int sth_add_bitmap_font(struct sth_stash* stash, int ascent, int descent, int line_gap);
-int sth_add_glyph_for_codepoint(struct sth_stash* stash, int idx, SDL::GLuint id, unsigned int codepoint,
+int sth_add_glyph_for_codepoint(struct sth_stash* stash, int idx, SDL::SDL_Texture* id, unsigned int codepoint,
                                 short size, short base, int x, int y, int w, int h,
                                 float xoffset, float yoffset, float xadvance);
-int sth_add_glyph_for_char(struct sth_stash* stash, int idx, SDL::GLuint id, const char* s,
+int sth_add_glyph_for_char(struct sth_stash* stash, int idx, SDL::SDL_Texture* id, const char* s,
                            short size, short base, int x, int y, int w, int h,
                            float xoffset, float yoffset, float xadvance);
 
-void sth_begin_draw(struct sth_stash* stash);
+void sth_begin_draw(struct sth_stash* stash, Color);
 void sth_end_draw(struct sth_stash* stash);
 
 void sth_draw_text(struct sth_stash* stash,

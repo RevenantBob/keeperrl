@@ -135,8 +135,9 @@ class Renderer {
   void considerMouseCursorAnim(Event&);
   void zoomMousePos(Event&);
   void updateResolution();
-  void initOpenGL();
+  void initRenderer();
   SDL::SDL_Window* window;
+  SDL::SDL_Renderer* sdlRenderer = nullptr;
   int width, height;
   bool monkey = false;
   deque<Event> eventQueue;
@@ -164,8 +165,11 @@ class Renderer {
   SDL::SDL_Cursor* cursor;
   SDL::SDL_Cursor* cursorClicked;
   SDL::SDL_Surface* loadScaledSurface(const FilePath& path, double scale);
-  optional<SDL::GLuint> currentTexture;
+  SDL::SDL_Texture* currentTexture = nullptr;
+  SDL::SDL_TextureAddressMode currentAddressMode = SDL::SDL_TEXTURE_ADDRESS_AUTO;
   void drawSprite(const Texture& t, Vec2 a, Vec2 b, Vec2 c, Vec2 d, Vec2 p, Vec2 k, optional<Color> color);
+  void drawSpriteImpl(SDL::SDL_Texture*, SDL::SDL_TextureAddressMode, Vec2 a, Vec2 b, Vec2 c, Vec2 d, Vec2 p, Vec2 k,
+      Vec2 realSize, optional<Color> color);
   void drawSprite(const Texture& t, Vec2 topLeft, Vec2 bottomRight, Vec2 p, Vec2 k, optional<Color> color);
   struct DeferredSprite {
     Vec2 a, b, c, d;
@@ -175,6 +179,20 @@ class Renderer {
   };
   vector<DeferredSprite> deferredSprites;
   vector<Rectangle> scissorStack;
+  void setScissorImpl(optional<Rectangle>, bool reset);
+  void drawFilledRectangleImpl(const Rectangle&, Color, optional<Color> outline);
+  void drawLineImpl(Vec2 from, Vec2 to, Color, double width);
+  void drawPointImpl(Vec2 pos, Color color, int size);
+  void drawTextImpl(FontId, int size, Color, Vec2 pos, const string&, CenterType center);
+  int topLayerDepth = 0;
+  vector<function<void()>> topLayerCommands;
+  template<class F>
+  void runOrDefer(F&& f) {
+    if (topLayerDepth > 0)
+      topLayerCommands.emplace_back(std::forward<F>(f));
+    else
+      f();
+  }
   void loadTilesFromDir(const DirectoryPath&, Vec2 size, int setWidth);
   struct TileDirectory {
     DirectoryPath path;

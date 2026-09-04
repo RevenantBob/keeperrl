@@ -30,8 +30,8 @@ void MinimapGui::render(Renderer& renderer) {
   auto target = getBounds();
   if (!mapBufferTex)
     mapBufferTex.emplace(mapBuffer);
-  else if (auto error = mapBufferTex->loadFromMaybe(mapBuffer))
-    FATAL << "Failed to render minimap, error: " << toString(*error);
+  else if (!mapBufferTex->loadFromMaybe(mapBuffer))
+    FATAL << "Failed to render minimap";
   renderer.drawImage(target, info.bounds, *mapBufferTex);
   Vec2 topLeft = target.topLeft();
   double scale = min(double(target.width()) / info.bounds.width(),

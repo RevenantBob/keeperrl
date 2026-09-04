@@ -1,22 +1,10 @@
 #pragma once
 
-#ifdef WINDOWS
-#ifndef _WINDOWS_
-#define _WINDOWS_
-#define APIENTRY __attribute__((__stdcall__))
-#define WINGDIAPI __attribute__((dllimport))
-#endif
-#else
-#define GL_GLEXT_PROTOTYPES 1
-#endif
-
 #include "stdafx.h"
 #include "extern/lodepng.h"
 
 namespace SDL {
 #include <SDL3/SDL.h>
-#include <SDL3/SDL_opengl.h>
-#include <SDL3/SDL_opengl_glext.h>
 
 // SDL3_image isn't vendored in this checkout, and the game only ever loads PNGs,
 // so provide a minimal IMG_Load/IMG_GetError-compatible shim backed by the
@@ -61,3 +49,6 @@ typedef SDL::SDL_EventType EventType;
 // SDL3 requires a window for SDL_StartTextInput/SDL_StopTextInput (SDL2 didn't). The game only
 // ever has one window, so track it here instead of threading it through every GUI element.
 extern SDL::SDL_Window* keeperrlMainWindow;
+// Texture loading (texture.cpp, fontstash.cpp) needs an SDL_Renderer to create SDL_Textures but
+// otherwise has no access to the Renderer object, so track it here too.
+extern SDL::SDL_Renderer* keeperrlRenderer;

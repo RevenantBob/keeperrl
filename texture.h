@@ -16,7 +16,6 @@
 #pragma once
 
 #include "util.h"
-#include "opengl.h"
 #include "sdl.h"
 #include "color.h"
 #include "file_path.h"
@@ -33,7 +32,7 @@ class Texture {
   ~Texture();
 
   static optional<Texture> loadMaybe(const FilePath&);
-  optional<SDL::GLenum> loadFromMaybe(SDL::SDL_Surface*);
+  bool loadFromMaybe(SDL::SDL_Surface*);
   bool loadPixels(unsigned char* pixels);
 
   Vec2 getSize() const {
@@ -42,7 +41,7 @@ class Texture {
   Vec2 getRealSize() const {
     return realSize;
   }
-  const optional<SDL::GLuint>& getTexId() const {
+  SDL::SDL_Texture* getTexId() const {
     return texId;
   }
   const optional<FilePath>& getPath() const {
@@ -50,18 +49,20 @@ class Texture {
   }
 
   static SDL::SDL_Surface* createSurface(int w, int h);
-  static SDL::SDL_Surface* createPowerOfTwoSurface(SDL::SDL_Surface*);
 
   enum class Filter { nearest, linear };
   enum class Wrapping { repeat, clamp };
   void setParams(Filter, Wrapping);
+  SDL::SDL_TextureAddressMode getAddressMode() const {
+    return addressMode;
+  }
 
   private:
   Texture();
-  void addTexCoord(int x, int y) const;
 
-  // When texId != none, it's always > 0
-  optional<SDL::GLuint> texId;
+  // When texId != nullptr, it's a texture we own and must destroy.
+  SDL::SDL_Texture* texId = nullptr;
+  SDL::SDL_TextureAddressMode addressMode = SDL::SDL_TEXTURE_ADDRESS_AUTO;
   Vec2 size;
   Vec2 realSize;
   optional<FilePath> path;

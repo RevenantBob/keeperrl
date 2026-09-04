@@ -27,28 +27,25 @@
 #include "sdl_event_generator.h"
 #include "clock.h"
 #include "gzstream.h"
-#include "opengl.h"
 #include "tileset.h"
 #include "steam_input.h"
 
 SDL::SDL_Window* keeperrlMainWindow = nullptr;
+SDL::SDL_Renderer* keeperrlRenderer = nullptr;
+
+static SDL::SDL_FColor toFColor(Color color) {
+  return SDL::SDL_FColor{(float)color.r / 255, (float)color.g / 255, (float)color.b / 255, (float)color.a / 255};
+}
 
 void Renderer::renderDeferredSprites() {
-  static vector<SDL::GLfloat> vertices;
-  static vector<SDL::GLfloat> texCoords;
-  static vector<SDL::GLfloat> colors;
+  static vector<SDL::SDL_Vertex> vertices;
   vertices.clear();
-  texCoords.clear();
-  colors.clear();
   auto addVertex = [&](Vec2 v, int texX, int texY, Vec2 texSize, Color color) {
-    vertices.push_back(v.x);
-    vertices.push_back(v.y);
-    texCoords.push_back(((float)texX) / texSize.x);
-    texCoords.push_back(((float)texY) / texSize.y);
-    colors.push_back(((float) color.r) / 255);
-    colors.push_back(((float) color.g) / 255);
-    colors.push_back(((float) color.b) / 255);
-    colors.push_back(((float) color.a) / 255);
+    SDL::SDL_Vertex vert;
+    vert.position = {(float)v.x, (float)v.y};
+    vert.tex_coord = {(float)texX / texSize.x, (float)texY / texSize.y};
+    vert.color = toFColor(color);
+    vertices.push_back(vert);
   };
   for (auto& elem : deferredSprites) {
     auto add = [&](Vec2 v, int texX, int texY, const DeferredSprite& draw) {
@@ -62,25 +59,9 @@ void Renderer::renderDeferredSprites() {
     add(elem.d, elem.p.x, elem.k.y, elem);
   }
   if (!vertices.empty()) {
-    CHECK_OPENGL_ERROR();
-    SDL::glBindTexture(GL_TEXTURE_2D, *currentTexture);
-    SDL::glEnable(GL_TEXTURE_2D);
-    SDL::glEnableClientState(GL_VERTEX_ARRAY);
-    SDL::glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-    SDL::glEnableClientState(GL_COLOR_ARRAY);
-    SDL::glColorPointer(4, GL_FLOAT, 0, colors.data());
-    SDL::glVertexPointer(2, GL_FLOAT, 0, vertices.data());
-    SDL::glTexCoordPointer(2, GL_FLOAT, 0, texCoords.data());
-    SDL::glDrawArrays(GL_TRIANGLES, 0, vertices.size() / 2);
+    SDL::SDL_SetRenderTextureAddressMode(sdlRenderer, currentAddressMode, currentAddressMode);
+    SDL::SDL_RenderGeometry(sdlRenderer, currentTexture, vertices.data(), (int)vertices.size(), nullptr, 0);
     vertices.clear();
-    texCoords.clear();
-    colors.clear();
-
-    SDL::glDisableClientState(GL_VERTEX_ARRAY);
-    SDL::glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-    SDL::glDisableClientState(GL_COLOR_ARRAY);
-    SDL::glDisable(GL_TEXTURE_2D);
-    CHECK_OPENGL_ERROR();
   }
   deferredSprites.clear();
 }
@@ -90,11 +71,22 @@ void Renderer::drawSprite(const Texture& t, Vec2 topLeft, Vec2 bottomRight, Vec2
 }
 
 void Renderer::drawSprite(const Texture& t, Vec2 a, Vec2 b, Vec2 c, Vec2 d, Vec2 p, Vec2 k, optional<Color> color) {
-  if (currentTexture && currentTexture != t.getTexId())
+  auto texId = t.getTexId();
+  auto addressMode = t.getAddressMode();
+  auto realSize = t.getRealSize();
+  CHECK(texId);
+  runOrDefer([this, texId, addressMode, a, b, c, d, p, k, realSize, color] {
+    drawSpriteImpl(texId, addressMode, a, b, c, d, p, k, realSize, color);
+  });
+}
+
+void Renderer::drawSpriteImpl(SDL::SDL_Texture* texId, SDL::SDL_TextureAddressMode addressMode, Vec2 a, Vec2 b,
+    Vec2 c, Vec2 d, Vec2 p, Vec2 k, Vec2 realSize, optional<Color> color) {
+  if (currentTexture && (currentTexture != texId || currentAddressMode != addressMode))
     renderDeferredSprites();
-  currentTexture = t.getTexId();
-  CHECK(currentTexture);
-  deferredSprites.push_back({a, b, c, d, p, k, t.getRealSize(), color});
+  currentTexture = texId;
+  currentAddressMode = addressMode;
+  deferredSprites.push_back({a, b, c, d, p, k, realSize, color});
 }
 
 static float sizeConv(int size) {
@@ -370,6 +362,10 @@ int Renderer::getFont(FontId id) {
 }
 
 void Renderer::drawText(FontId id, int size, Color color, Vec2 pos, const string& s, CenterType center) {
+  runOrDefer([this, id, size, color, pos, s, center] { drawTextImpl(id, size, color, pos, s, center); });
+}
+
+void Renderer::drawTextImpl(FontId id, int size, Color color, Vec2 pos, const string& s, CenterType center) {
   renderDeferredSprites();
   if (id == FontId::MAP_FONT) {
     for (int i = 0; i < s.size();) {
@@ -400,8 +396,7 @@ void Renderer::drawText(FontId id, int size, Color color, Vec2 pos, const string
       default:
         break;
     }
-    sth_begin_draw(fontStash);
-    glColor(color);
+    sth_begin_draw(fontStash, color);
     sth_draw_text(fontStash, getFont(id), sizeConv(size), ox + pos.x, oy + pos.y + (dim.y * 0.9), s.c_str(), nullptr);
     sth_end_draw(fontStash);
   }
@@ -475,46 +470,61 @@ void Renderer::drawSprite(Vec2 pos, Vec2 source, Vec2 size, const Texture& t,
   drawSprite(t, a, b, c, d, source, source + size, color);
 }
 
+static void fillQuad(SDL::SDL_Renderer* r, Vec2 a, Vec2 b, Vec2 c, Vec2 d, Color color) {
+  auto fcolor = toFColor(color);
+  SDL::SDL_Vertex verts[6];
+  Vec2 corners[4] = {a, b, c, d};
+  int order[6] = {0, 1, 2, 0, 2, 3};
+  for (int i = 0; i < 6; ++i) {
+    verts[i].position = {(float)corners[order[i]].x, (float)corners[order[i]].y};
+    verts[i].color = fcolor;
+    verts[i].tex_coord = {0, 0};
+  }
+  SDL::SDL_RenderGeometry(r, nullptr, verts, 6, nullptr, 0);
+}
+
 void Renderer::drawFilledRectangle(const Rectangle& t, Color color, optional<Color> outline) {
+  runOrDefer([this, t, color, outline] { drawFilledRectangleImpl(t, color, outline); });
+}
+
+void Renderer::drawFilledRectangleImpl(const Rectangle& t, Color color, optional<Color> outline) {
   renderDeferredSprites();
   Vec2 a = t.topLeft();
   Vec2 b = t.bottomRight();
   if (outline) {
-    SDL::glLineWidth(2);
-    SDL::glBegin(GL_LINE_LOOP);
-    glColor(*outline);
-    SDL::glVertex2f(a.x + 1.5f, a.y + 1.0f);
-    SDL::glVertex2f(b.x - 0.5f, a.y + 1.0f);
-    SDL::glVertex2f(b.x - 0.5f, b.y - 0.5f);
-    SDL::glVertex2f(a.x + 1.5f, b.y - 0.5f);
-    SDL::glEnd();
-    a += Vec2(2, 2);
-    b -= Vec2(1, 1);
+    // Approximate the old 2px GL_LINE_LOOP outline with four independently-blended border
+    // strips, rather than filling the full rect and relying on the inner fill to paint over it
+    // -- that assumption breaks when the fill color is translucent or fully transparent (e.g.
+    // Frame() draws Color::TRANSPARENT as the fill), since alpha-blending a transparent quad on
+    // top doesn't erase what's underneath.
+    Vec2 innerA = a + Vec2(2, 2);
+    Vec2 innerB = b - Vec2(1, 1);
+    fillQuad(sdlRenderer, a, Vec2(b.x, a.y), Vec2(b.x, innerA.y), Vec2(a.x, innerA.y), *outline);
+    fillQuad(sdlRenderer, Vec2(a.x, innerB.y), Vec2(b.x, innerB.y), b, Vec2(a.x, b.y), *outline);
+    fillQuad(sdlRenderer, Vec2(a.x, innerA.y), Vec2(innerA.x, innerA.y), Vec2(innerA.x, innerB.y), Vec2(a.x, innerB.y),
+        *outline);
+    fillQuad(sdlRenderer, Vec2(innerB.x, innerA.y), Vec2(b.x, innerA.y), Vec2(b.x, innerB.y), Vec2(innerB.x, innerB.y),
+        *outline);
+    a = innerA;
+    b = innerB;
   }
-  SDL::glBegin(GL_QUADS);
-  glColor(color);
-  SDL::glVertex2f(a.x, a.y);
-  SDL::glVertex2f(b.x, a.y);
-  SDL::glVertex2f(b.x, b.y);
-  SDL::glVertex2f(a.x, b.y);
-  SDL::glEnd();
+  fillQuad(sdlRenderer, a, Vec2(b.x, a.y), b, Vec2(a.x, b.y), color);
 }
 
 void Renderer::drawLine(Vec2 from, Vec2 to, Color color, double width) {
+  runOrDefer([this, from, to, color, width] { drawLineImpl(from, to, color, width); });
+}
+
+void Renderer::drawLineImpl(Vec2 from, Vec2 to, Color color, double width) {
   renderDeferredSprites();
-  SDL::glBegin(GL_QUADS);
   double dx = to.x - from.x;
   double dy = to.y - from.y;
   double length = sqrt(dx * dx + dy * dy);
   dx /= length;
   dy /= length;
-  glColor(color);
   width /= 2;
-  SDL::glVertex2d(from.x + dy * width, from.y - dx * width);
-  SDL::glVertex2d(to.x + dy * width, to.y - dx * width);
-  SDL::glVertex2d(to.x - dy * width, to.y + dx * width);
-  SDL::glVertex2d(from.x - dy * width, from.y + dx * width);
-  SDL::glEnd();
+  fillQuad(sdlRenderer, Vec2(from.x + dy * width, from.y - dx * width), Vec2(to.x + dy * width, to.y - dx * width),
+      Vec2(to.x - dy * width, to.y + dx * width), Vec2(from.x - dy * width, from.y + dx * width), color);
 }
 
 void Renderer::drawFilledRectangle(int px, int py, int kx, int ky, Color color, optional<Color> outline) {
@@ -522,11 +532,14 @@ void Renderer::drawFilledRectangle(int px, int py, int kx, int ky, Color color, 
 }
 
 void Renderer::drawPoint(Vec2 pos, Color color, int size) {
-  SDL::glPointSize(size);
-  SDL::glBegin(GL_POINTS);
-  glColor(color);
-  SDL::glVertex2f(pos.x, pos.y);
-  SDL::glEnd();
+  runOrDefer([this, pos, color, size] { drawPointImpl(pos, color, size); });
+}
+
+void Renderer::drawPointImpl(Vec2 pos, Color color, int size) {
+  renderDeferredSprites();
+  double half = size / 2.0;
+  fillQuad(sdlRenderer, pos - Vec2(half, half), pos + Vec2(half, -half), pos + Vec2(half, half),
+      pos - Vec2(half, -half), color);
 }
 
 void Renderer::addQuad(const Rectangle& r, Color color) {
@@ -534,12 +547,14 @@ void Renderer::addQuad(const Rectangle& r, Color color) {
 }
 
 void Renderer::setScissor(optional<Rectangle> s, bool reset) {
+  runOrDefer([this, s, reset] { setScissorImpl(s, reset); });
+}
+
+void Renderer::setScissorImpl(optional<Rectangle> s, bool reset) {
   renderDeferredSprites();
   auto applyScissor = [&] (Rectangle rect) {
-    double zoom = getZoom();
-    SDL::glScissor(rect.left() * zoom, (getSize().y - rect.bottom()) * zoom,
-        rect.width() * zoom, rect.height() * zoom);
-    SDL::glEnable(GL_SCISSOR_TEST);
+    SDL::SDL_Rect r{(int)rect.left(), (int)rect.top(), (int)rect.width(), (int)rect.height()};
+    SDL::SDL_SetRenderClipRect(sdlRenderer, &r);
   };
   if (s) {
     Rectangle rect = *s;
@@ -554,24 +569,17 @@ void Renderer::setScissor(optional<Rectangle> s, bool reset) {
     if (!scissorStack.empty())
       applyScissor(scissorStack.back());
     else
-      SDL::glDisable(GL_SCISSOR_TEST);
+      SDL::SDL_SetRenderClipRect(sdlRenderer, nullptr);
   }
 }
 
 void Renderer::setTopLayer() {
-  renderDeferredSprites();
-  SDL::glPushMatrix();
-  SDL::glTranslated(0, 0, 1);
-  SDL::glDisable(GL_SCISSOR_TEST);
-  CHECK_OPENGL_ERROR();
+  ++topLayerDepth;
 }
 
 void Renderer::popLayer() {
-  renderDeferredSprites();
-  SDL::glPopMatrix();
-  if (!scissorStack.empty())
-    SDL::glEnable(GL_SCISSOR_TEST);
-  CHECK_OPENGL_ERROR();
+  --topLayerDepth;
+  CHECK(topLayerDepth >= 0);
 }
 
 Vec2 Renderer::getSize() {
@@ -596,7 +604,7 @@ void Renderer::setFullscreen(bool v) {
   fullscreen = v;
   CHECK(SDL::SDL_SetWindowFullscreen(window, v)) << SDL::SDL_GetError();
   SDL_GetWindowSizeInPixels(window, &width, &height);
-  initOpenGL();
+  initRenderer();
 }
 
 void Renderer::setFullscreenMode(int v) {
@@ -615,7 +623,7 @@ double Renderer::getZoom() {
 
 void Renderer::setZoom(double v) {
   zoom = v;
-  initOpenGL();
+  initRenderer();
 }
 
 void Renderer::enableCustomCursor(bool state) {
@@ -623,14 +631,8 @@ void Renderer::enableCustomCursor(bool state) {
   reloadCursors();
 }
 
-void Renderer::initOpenGL() {
-  setupOpenglView(width, height, getZoom());
-  SDL::glEnable(GL_BLEND);
-  SDL::glEnable(GL_TEXTURE_2D);
-  SDL::glEnable(GL_DEPTH_TEST);
-  SDL::glDepthFunc(GL_LEQUAL);
-  SDL::glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
-  CHECK(SDL::glGetError() == GL_NO_ERROR);
+void Renderer::initRenderer() {
+  SDL::SDL_SetRenderScale(sdlRenderer, (float)getZoom(), (float)getZoom());
   reloadCursors();
 }
 
@@ -668,7 +670,7 @@ void Renderer::initialize() {
     renderThreadId = currentThreadId();
   else
     CHECK(currentThreadId() == *renderThreadId);
-  initOpenGL();
+  initRenderer();
 }
 
 void Renderer::loadFonts(const DirectoryPath& fontPath, FontSet& fonts) {
@@ -694,7 +696,7 @@ void Renderer::setTileSet(TileSet* s) {
 }
 
 void Renderer::setVsync(bool on) {
-  SDL::SDL_GL_SetSwapInterval(on ? 1 : 0);
+  SDL::SDL_SetRenderVSync(sdlRenderer, on ? 1 : 0);
 }
 
 void Renderer::setFpsLimit(int fps) {
@@ -706,19 +708,28 @@ Renderer::Renderer(Clock* clock, MySteamInput* i, const string& title, const Dir
     : cursorPath(cursorP), clickedCursorPath(clickedCursorP),
       clock(clock), steamInput(i) {
   CHECK(SDL::SDL_Init(SDL_INIT_AUDIO | SDL_INIT_VIDEO | SDL_INIT_EVENTS)) << SDL::SDL_GetError();
-  SDL::SDL_GL_SetAttribute(SDL::SDL_GL_CONTEXT_MAJOR_VERSION, 2 );
-  SDL::SDL_GL_SetAttribute(SDL::SDL_GL_CONTEXT_MINOR_VERSION, 1 );
   CHECK(window = SDL::SDL_CreateWindow("KeeperRL", 1200, 720,
-    SDL_WINDOW_RESIZABLE | SDL_WINDOW_MAXIMIZED | SDL_WINDOW_OPENGL)) << SDL::SDL_GetError();
+    SDL_WINDOW_RESIZABLE | SDL_WINDOW_MAXIMIZED)) << SDL::SDL_GetError();
   keeperrlMainWindow = window;
-  CHECK(SDL::SDL_GL_CreateContext(window)) << SDL::SDL_GetError();
+  sdlRenderer = SDL::SDL_CreateRenderer(window, "vulkan");
+  if (!sdlRenderer) {
+    INFO << "Failed to create Vulkan SDL renderer (" << SDL::SDL_GetError()
+         << "), falling back to the default renderer";
+    CHECK(sdlRenderer = SDL::SDL_CreateRenderer(window, nullptr)) << SDL::SDL_GetError();
+  }
+  keeperrlRenderer = sdlRenderer;
+  // Untextured SDL_RenderGeometry calls (fillQuad: drawFilledRectangle/drawLine/drawPoint) use the
+  // renderer's own draw blend mode rather than per-vertex alpha, and it defaults to
+  // SDL_BLENDMODE_NONE (opaque) -- without this, every translucent solid-color draw (fog-of-war
+  // shading, selection overlays, etc.) would render fully opaque instead of blending.
+  SDL::SDL_SetRenderDrawBlendMode(sdlRenderer, SDL_BLENDMODE_BLEND);
   SDL_SetWindowMinimumSize(window, minResolution.x, minResolution.y);
   SDL::SDL_Event ev;
   while(SDL_PollEvent(&ev)){}
   SDL::SDL_GetWindowSizeInPixels(window, &width, &height);
   setVsync(true);
   originalCursor = SDL::SDL_GetCursor();
-  initOpenGL();
+  initRenderer();
   loadFonts(fontPath, fonts);
   auto icon = SDL::IMG_Load(iconPath.getPath());
   SDL_SetWindowIcon(window, icon);
@@ -844,7 +855,13 @@ void Renderer::drawAndClearBuffer() {
   if (steamInput)
     steamInput->runFrame();
   renderDeferredSprites();
-  CHECK_OPENGL_ERROR();
+  if (!topLayerCommands.empty()) {
+    auto commands = std::move(topLayerCommands);
+    topLayerCommands.clear();
+    for (auto& cmd : commands)
+      cmd();
+    renderDeferredSprites();
+  }
   if (fpsLimit) {
     uint64_t end = SDL::SDL_GetPerformanceCounter();
     float elapsedMs = (end - frameStart) / (float)SDL::SDL_GetPerformanceFrequency() * 1000.0f;
@@ -852,17 +869,15 @@ void Renderer::drawAndClearBuffer() {
     if (sleepMs > 0.0)
       SDL::SDL_Delay(sleepMs);
   }
-  SDL::SDL_GL_SwapWindow(window);
-  CHECK_OPENGL_ERROR();
+  SDL::SDL_RenderPresent(sdlRenderer);
   frameStart = SDL::SDL_GetPerformanceCounter();
-  SDL::glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-  SDL::glClearColor(0.0, 0.0, 0.0, 0.0);
-  CHECK_OPENGL_ERROR();
+  SDL::SDL_SetRenderDrawColor(sdlRenderer, 0, 0, 0, 0);
+  SDL::SDL_RenderClear(sdlRenderer);
 }
 
 void Renderer::resize(int w, int h) {
   SDL_GetWindowSizeInPixels(window, &width, &height);
-  initOpenGL();
+  initRenderer();
 }
 
 bool Renderer::isKeypressed(SDL::SDL_Scancode key) {
@@ -1006,29 +1021,16 @@ bool Renderer::isMonkey() {
   return monkey;
 }
 
-SDL::SDL_Surface* flipVert(SDL::SDL_Surface* sfc) {
-   auto result = SDL::SDL_CreateSurface(sfc->w, sfc->h, sfc->format);
-   CHECK(result);
-   std::uint8_t* pixels = (std::uint8_t*) sfc->pixels;
-   std::uint8_t* rpixels = (std::uint8_t*) result->pixels;
-   std::uint32_t pitch = sfc->pitch;
-   std::uint32_t pxlength = pitch*sfc->h;
-   for(auto line = 0; line < sfc->h; ++line) {
-     std::uint32_t pos = line * pitch;
-     memcpy(rpixels + pos, pixels + pxlength - pos - pitch, pitch);
-   }
-   return result;
-}
-
 void Renderer::makeScreenshot(const FilePath& path, Rectangle bounds) {
-  auto image = SDL::SDL_CreateSurface(bounds.width(), bounds.height(), SDL::SDL_PIXELFORMAT_RGB24);
-  SDL::glReadBuffer(GL_FRONT);
-  SDL::glReadPixels(bounds.left(), height - bounds.bottom(), bounds.width(), bounds.height(), GL_RGB, GL_UNSIGNED_BYTE, image->pixels);
-  auto inverted = flipVert(image);
-  unsigned error = lodepng::encode(path.getPath(), (unsigned char*)inverted->pixels, bounds.width(), bounds.height(), LCT_RGB);
+  SDL::SDL_Rect rect{(int)bounds.left(), (int)bounds.top(), (int)bounds.width(), (int)bounds.height()};
+  auto image = SDL::SDL_RenderReadPixels(sdlRenderer, &rect);
+  CHECK(image) << SDL::SDL_GetError();
+  auto rgb = SDL::SDL_ConvertSurface(image, SDL::SDL_PIXELFORMAT_RGB24);
+  CHECK(rgb) << SDL::SDL_GetError();
+  unsigned error = lodepng::encode(path.getPath(), (unsigned char*)rgb->pixels, bounds.width(), bounds.height(), LCT_RGB);
   USER_CHECK(!error) << "encoder error " << error << ": "<< lodepng_error_text(error);
   SDL_DestroySurface(image);
-  SDL_DestroySurface(inverted);
+  SDL_DestroySurface(rgb);
 }
 
 void playfile(const char *fname, SDL::SDL_Window* screen, Renderer&, float volume);

@@ -445,11 +445,7 @@ static int keeperMain(po::parser& commandLineFlags) {
       freeDataPath.file("images/mouse_cursor2.png"),
       freeDataPath.file("images/icon.png"),
       freeDataPath.file("images/map_font2.png"));
-  initializeGLExtensions();
 
-#ifndef RELEASE
-  installOpenglDebugHandler();
-#endif
   FatalLog.addOutput(DebugOutput::toString([&renderer](const string& s) { renderer.showError(s);}));
   UserErrorLog.addOutput(DebugOutput::toString([&renderer](const string& s) { renderer.showError(s);}));
   UserInfoLog.addOutput(DebugOutput::toString([&renderer](const string& s) { renderer.showError(s);}));
