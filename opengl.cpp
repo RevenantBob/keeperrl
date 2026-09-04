@@ -125,7 +125,7 @@ bool installOpenglDebugHandler() {
   else if (vendor.find("amd") != string::npos)
     s_vendor = OpenglVendor::amd;
 
-  if (isOpenglExtensionAvailable("KHR_debug")) {
+  if (isOpenglFeatureAvailable(OpenglFeature::DEBUG)) {
     SDL::glEnable(GL_DEBUG_OUTPUT);
     SDL::glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
     SDL::glDebugMessageCallback(debugOutputCallback, nullptr);
@@ -240,6 +240,8 @@ void initializeGLExtensions() {
   LOAD(glFramebufferTexture2D);
   LOAD(glDrawBuffers);
   LOAD(glBlendFuncSeparate);
+  LOAD(glDebugMessageCallback);
+  LOAD(glDebugMessageControl);
 #undef LOAD
 #endif
 }
