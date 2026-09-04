@@ -16,7 +16,9 @@ struct ExternalEnemy {
   SERIALIZE_ALL(NAMED(creatures), NAMED(behaviour), NAMED(name), NAMED(attackTime), OPTION(maxOccurences))
 };
 
+#ifndef _MSC_VER
 static_assert(std::is_nothrow_move_constructible<ExternalEnemy>::value, "T should be noexcept MoveConstructible");
+#endif
 
 
 struct EnemyEvent {

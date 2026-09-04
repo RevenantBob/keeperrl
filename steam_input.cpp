@@ -1,4 +1,7 @@
 #include "steam_input.h"
+
+#ifdef USE_STEAMWORKS
+
 #include "extern/steamworks/public/steam/isteaminput.h"
 #include "extern/steamworks/public/steam/isteamutils.h"
 #include "clock.h"
@@ -184,3 +187,21 @@ void MySteamInput::dismissFloatingKeyboard() {
   if (auto utils = SteamUtils())
     utils->DismissFloatingGamepadTextInput();
 }
+
+#else // USE_STEAMWORKS
+
+// No Steamworks SDK available in this build -- all controller/deck-input features are no-ops.
+void MySteamInput::init() {}
+void MySteamInput::detectControllers() {}
+bool MySteamInput::isPressed(ControllerKey) { return false; }
+optional<FilePath> MySteamInput::getGlyph(ControllerKey) { return none; }
+void MySteamInput::runFrame() {}
+pair<double, double> MySteamInput::getJoyPos(ControllerJoy) { return {0, 0}; }
+void MySteamInput::setGameActionLayer(GameActionLayer) {}
+optional<ControllerKey> MySteamInput::getEvent() { return none; }
+void MySteamInput::showBindingScreen() {}
+bool MySteamInput::isRunningOnDeck() { return false; }
+void MySteamInput::showFloatingKeyboard(Rectangle) {}
+void MySteamInput::dismissFloatingKeyboard() {}
+
+#endif // USE_STEAMWORKS

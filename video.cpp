@@ -26,9 +26,18 @@ typedef struct AudioQueue {
 
 static volatile AudioQueue *audio_queue = NULL;
 static volatile AudioQueue *audio_queue_tail = NULL;
+static SDL_AudioStream *audio_stream = NULL;
 
-static void SDLCALL audio_callback(void *userdata, Uint8 *stream, int len) {
-  Sint16 *dst = (Sint16 *)stream;
+// SDL3 removed the SDL2 "simple audio" callback API (SDL_OpenAudio/SDL_LockAudio/...): a stream's
+// callback is now asked to push data into the stream instead of filling a buffer it's handed.
+static void SDLCALL audio_callback(void *userdata, SDL_AudioStream *stream, int additional_amount, int total_amount) {
+  if (additional_amount <= 0)
+    return;
+  Uint8 *buf = (Uint8 *)SDL_malloc(additional_amount);
+  if (!buf)
+    return;
+  Sint16 *dst = (Sint16 *)buf;
+  int len = additional_amount;
   float volume = *((float*)userdata);
   while (audio_queue && (len > 0)) {
     volatile AudioQueue *item = audio_queue;
@@ -67,6 +76,9 @@ static void SDLCALL audio_callback(void *userdata, Uint8 *stream, int len) {
 
   if (len > 0)
     memset(dst, '\0', len);
+
+  SDL_PutAudioStreamData(stream, buf, additional_amount);
+  SDL_free(buf);
 }
 
 
@@ -81,13 +93,13 @@ static void queue_audio(const THEORAPLAY_AudioPacket *audio) {
   item->offset = 0;
   item->next = NULL;
 
-  SDL_LockAudio();
+  SDL_LockAudioStream(audio_stream);
   if (audio_queue_tail)
     audio_queue_tail->next = item;
   else
     audio_queue = item;
   audio_queue_tail = item;
-  SDL_UnlockAudio();
+  SDL_UnlockAudioStream(audio_stream);
 }
 
 
@@ -117,12 +129,10 @@ void playfile(const char *fname, SDL_Window* screen, Renderer& renderer, float v
 
   memset(&spec, '\0', sizeof(SDL_AudioSpec));
   spec.freq = audio->freq;
-  spec.format = AUDIO_S16SYS;
+  spec.format = SDL_AUDIO_S16;
   spec.channels = audio->channels;
-  spec.samples = 2048;
-  spec.callback = audio_callback;
-  spec.userdata = &volume;
-  initfailed = quit = (initfailed || (SDL_OpenAudio(&spec, NULL) != 0));
+  audio_stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, audio_callback, &volume);
+  initfailed = quit = (initfailed || !audio_stream);
   while (audio) {
     queue_audio(audio);
     audio = THEORAPLAY_getAudio(decoder);
@@ -131,7 +141,7 @@ void playfile(const char *fname, SDL_Window* screen, Renderer& renderer, float v
   baseticks = SDL_GetTicks();
 
   if (!quit)
-    SDL_PauseAudio(0);
+    SDL_ResumeAudioStreamDevice(audio_stream);
   auto texture = Texture(Color::BLACK, width, height);
   while (!quit && THEORAPLAY_isDecoding(decoder)) {
     const Uint32 now = SDL_GetTicks() - baseticks;
@@ -165,14 +175,14 @@ void playfile(const char *fname, SDL_Window* screen, Renderer& renderer, float v
       queue_audio(audio);
 
     while (renderer.pollEvent(event)) {
-      if (event.type == SDL::SDL_WINDOWEVENT && event.window.event == SDL::SDL_WINDOWEVENT_RESIZED)
+      if (event.type == SDL::SDL_EVENT_WINDOW_RESIZED)
         renderer.resize(event.window.data1, event.window.data2);
       switch (event.type) {
         case C_BUILDINGS_CONFIRM:
         case C_BUILDINGS_CANCEL:
-        case SDL_QUIT:
-        case SDL_KEYDOWN:
-        case SDL_MOUSEBUTTONDOWN:
+        case SDL_EVENT_QUIT:
+        case SDL_EVENT_KEY_DOWN:
+        case SDL_EVENT_MOUSE_BUTTON_DOWN:
           quit = 1;
           break;
         }
@@ -191,9 +201,9 @@ void playfile(const char *fname, SDL_Window* screen, Renderer& renderer, float v
   }
 
   while (!quit) {
-    SDL_LockAudio();
+    SDL_LockAudioStream(audio_stream);
     quit = (audio_queue == NULL);
-    SDL_UnlockAudio();
+    SDL_UnlockAudioStream(audio_stream);
     if (!quit)
       SDL_Delay(100);
   }
@@ -208,5 +218,6 @@ exitVideo:
   if (video) THEORAPLAY_freeVideo(video);
   if (audio) THEORAPLAY_freeAudio(audio);
   if (decoder) THEORAPLAY_stopDecode(decoder);
-  SDL_CloseAudio();
+  if (audio_stream)
+    SDL_DestroyAudioStream(audio_stream);
 }

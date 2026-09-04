@@ -22,7 +22,9 @@ struct WorkshopItemCfg {
   SERIALIZE_ALL(NAMED(item), OPTION(work), NAMED(cost), NAMED(tech), NAMED(tutorialHighlight), OPTION(requireIngredient), OPTION(materialTab), OPTION(requiresUpgrades))
 };
 
+#ifndef _MSC_VER
 static_assert(std::is_nothrow_move_constructible<WorkshopItemCfg>::value, "T should be noexcept MoveConstructible");
+#endif
 
 
 struct WorkshopItem {

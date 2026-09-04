@@ -614,7 +614,7 @@ class Test {
     CHECK(!equipment.isOwner(bow1.get(), human.get()));
     CHECK(!equipment.getItemsOwnedBy(human.get()).contains(bow1.get()));
     CHECK(equipment.tryToOwn(human.get(), bow1.get()));
-    bow2->addModifier(AttrType("DAMAGE"), -10);
+    bow2->addModifier(AttrType("RANGED_DAMAGE"), -10);
     CHECK(!equipment.needsItem(human.get(), bow2.get(), false));
     CHECK(equipment.needsItem(human.get(), bow2.get(), true));
     CHECK(equipment.tryToOwn(human.get(), bow2.get()));
@@ -711,7 +711,7 @@ class Test {
     CHECK(!equipment.getOwner(sword2.get()));
     PItem bow = ItemType(CustomItemId("Bow")).get(&contentFactory);
     PItem bow2 = ItemType(CustomItemId("Bow")).get(&contentFactory);
-    bow2->addModifier(AttrType("DAMAGE"), 30);
+    bow2->addModifier(AttrType("RANGED_DAMAGE"), 30);
     CHECK(equipment.getItemsOwnedBy(human1.get()).size() == 0);
     equipment.autoAssign(human1.get(), {bow.get()});
     CHECKEQ(equipment.getItemsOwnedBy(human1.get()), makeVec(bow.get()));
@@ -1236,10 +1236,10 @@ class Test {
     CHECKEQ(level.progress, 0.5 / 5);
     level.onKilledVillain(VillainType::LESSER);
     CHECKEQ(level.level, 3);
-    CHECKEQ(level.progress, 6.5 / 7);
+    CHECKEQ(level.progress, 1.5 / 7);
     level.onKilledVillain(VillainType::MAIN);
-    CHECKEQ(level.level, 6);
-    CHECKEQ(level.progress, 4.5 / 13);
+    CHECKEQ(level.level, 4);
+    CHECKEQ(level.progress, 6.5 / 9);
   }
 
   void testVectorConcat() {

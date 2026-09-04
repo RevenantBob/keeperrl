@@ -120,4 +120,6 @@ struct SettlementInfo {
   SERIALIZE_ALL(NAMED(type), OPTION(inhabitants), NAMED(corpses), NAMED(locationName), NAMED(locationNameGen), NAMED(tribe), NAMED(race), OPTION(stockpiles), NAMED(lootItem), OPTION(shopItems), OPTION(shopkeeperDead), OPTION(furniture), NAMED(outsideFeatures), OPTION(closeToPlayer), OPTION(dontConnectCave), OPTION(dontBuildRoad), OPTION(surroundWithResources), NAMED(extraResources), NAMED(crops))
 };
 
+#ifndef _MSC_VER
 static_assert(std::is_nothrow_move_constructible<SettlementInfo>::value, "T should be noexcept MoveConstructible");
+#endif

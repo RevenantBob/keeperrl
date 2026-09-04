@@ -2,7 +2,10 @@
 
 #include <cstddef>
 
-#ifdef _LIBCPP_VERSION
+#if defined(_LIBCPP_VERSION) || !defined(__GLIBCXX__)
+// Real <iomanip> works fine on libc++ (Clang) and on any non-libstdc++ standard
+// library (e.g. MSVC STL, used by clang-cl on Windows) -- the GCC-internal fallback
+// below only applies when actually compiling against an old libstdc++.
 #include <iomanip>
 #else
 

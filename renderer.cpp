@@ -14,7 +14,9 @@
    If not, see http://www.gnu.org/licenses/ . */
 
 #include "stdafx.h"
+#ifndef WINDOWS
 #include "dirent.h"
+#endif
 #include "extern/lodepng.h"
 
 #include "renderer.h"
@@ -28,6 +30,8 @@
 #include "opengl.h"
 #include "tileset.h"
 #include "steam_input.h"
+
+SDL::SDL_Window* keeperrlMainWindow = nullptr;
 
 void Renderer::renderDeferredSprites() {
   static vector<SDL::GLfloat> vertices;
@@ -584,13 +588,14 @@ bool Renderer::isFullscreen() {
 
 void Renderer::putPixel(SDL::SDL_Surface* surface, Vec2 pos, Color color) {
   SDL::Uint32 *pixels = (SDL::Uint32 *)surface->pixels;
-  pixels[ ( pos.y * surface->w ) + pos.x ] = SDL::SDL_MapRGBA(surface->format, color.r, color.g, color.b, color.a);;
+  pixels[ ( pos.y * surface->w ) + pos.x ] =
+      SDL::SDL_MapRGBA(SDL::SDL_GetPixelFormatDetails(surface->format), nullptr, color.r, color.g, color.b, color.a);;
 }
 
 void Renderer::setFullscreen(bool v) {
   fullscreen = v;
-  CHECK(SDL::SDL_SetWindowFullscreen(window, v ? SDL::SDL_WINDOW_FULLSCREEN_DESKTOP : 0) == 0) << SDL::SDL_GetError();
-  SDL_GL_GetDrawableSize(window, &width, &height);
+  CHECK(SDL::SDL_SetWindowFullscreen(window, v)) << SDL::SDL_GetError();
+  SDL_GetWindowSizeInPixels(window, &width, &height);
   initOpenGL();
 }
 
@@ -634,12 +639,12 @@ SDL::SDL_Surface* Renderer::loadScaledSurface(const FilePath& path, double scale
     if (scale == 1)
       return surface;
     if (auto scaled = Texture::createSurface(surface->w * scale, surface->h * scale)) {
-      SDL::SDL_SetSurfaceBlendMode(surface, SDL::SDL_BLENDMODE_NONE);
-      CHECK(!SDL_BlitScaled(surface, nullptr, scaled, nullptr)) << SDL::IMG_GetError();
-      SDL_FreeSurface(surface);
+      SDL::SDL_SetSurfaceBlendMode(surface, SDL_BLENDMODE_NONE);
+      CHECK(SDL_BlitSurfaceScaled(surface, nullptr, scaled, nullptr, SDL::SDL_SCALEMODE_LINEAR)) << SDL::IMG_GetError();
+      SDL_DestroySurface(surface);
       return scaled;
     }
-    SDL_FreeSurface(surface);
+    SDL_DestroySurface(surface);
   }
   return nullptr;
 }
@@ -677,7 +682,7 @@ void Renderer::loadFonts(const DirectoryPath& fontPath, FontSet& fonts) {
 }
 
 void Renderer::showError(const string& s) {
-  SDL_ShowSimpleMessageBox(SDL::SDL_MESSAGEBOX_ERROR, "Error", s.c_str(), window);
+  SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", s.c_str(), window);
 }
 
 TileSet& Renderer::getTileSet() {
@@ -700,16 +705,17 @@ Renderer::Renderer(Clock* clock, MySteamInput* i, const string& title, const Dir
     const FilePath& cursorP, const FilePath& clickedCursorP, const FilePath& iconPath, const FilePath& mapFontPath)
     : cursorPath(cursorP), clickedCursorPath(clickedCursorP),
       clock(clock), steamInput(i) {
-  CHECK(SDL::SDL_Init(SDL_INIT_AUDIO | SDL_INIT_VIDEO | SDL_INIT_EVENTS) >= 0) << SDL::SDL_GetError();
+  CHECK(SDL::SDL_Init(SDL_INIT_AUDIO | SDL_INIT_VIDEO | SDL_INIT_EVENTS)) << SDL::SDL_GetError();
   SDL::SDL_GL_SetAttribute(SDL::SDL_GL_CONTEXT_MAJOR_VERSION, 2 );
   SDL::SDL_GL_SetAttribute(SDL::SDL_GL_CONTEXT_MINOR_VERSION, 1 );
-  CHECK(window = SDL::SDL_CreateWindow("KeeperRL", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 1200, 720,
-    SDL::SDL_WINDOW_RESIZABLE | SDL::SDL_WINDOW_SHOWN | SDL::SDL_WINDOW_MAXIMIZED | SDL::SDL_WINDOW_OPENGL)) << SDL::SDL_GetError();
+  CHECK(window = SDL::SDL_CreateWindow("KeeperRL", 1200, 720,
+    SDL_WINDOW_RESIZABLE | SDL_WINDOW_MAXIMIZED | SDL_WINDOW_OPENGL)) << SDL::SDL_GetError();
+  keeperrlMainWindow = window;
   CHECK(SDL::SDL_GL_CreateContext(window)) << SDL::SDL_GetError();
   SDL_SetWindowMinimumSize(window, minResolution.x, minResolution.y);
   SDL::SDL_Event ev;
   while(SDL_PollEvent(&ev)){}
-  SDL::SDL_GL_GetDrawableSize(window, &width, &height);
+  SDL::SDL_GetWindowSizeInPixels(window, &width, &height);
   setVsync(true);
   originalCursor = SDL::SDL_GetCursor();
   initOpenGL();
@@ -855,7 +861,7 @@ void Renderer::drawAndClearBuffer() {
 }
 
 void Renderer::resize(int w, int h) {
-  SDL_GL_GetDrawableSize(window, &width, &height);
+  SDL_GetWindowSizeInPixels(window, &width, &height);
   initOpenGL();
 }
 
@@ -864,10 +870,10 @@ bool Renderer::isKeypressed(SDL::SDL_Scancode key) {
 }
 
 void Renderer::updateKeypressed(const Event& ev) {
-  if (ev.type == SDL::SDL_KEYDOWN)
-    keypressed[ev.key.keysym.scancode] = true;
-  else if (ev.type == SDL::SDL_KEYUP)
-    keypressed[ev.key.keysym.scancode] = false;
+  if (ev.type == SDL::SDL_EVENT_KEY_DOWN)
+    keypressed[ev.key.scancode] = true;
+  else if (ev.type == SDL::SDL_EVENT_KEY_UP)
+    keypressed[ev.key.scancode] = false;
 }
 
 bool Renderer::pollEventOrFromQueue(Event& ev) {
@@ -887,18 +893,18 @@ bool Renderer::pollEventOrFromQueue(Event& ev) {
 }
 
 void Renderer::considerMouseCursorAnim(Event& ev) {
-  if (ev.type == SDL::SDL_MOUSEBUTTONDOWN) {
+  if (ev.type == SDL::SDL_EVENT_MOUSE_BUTTON_DOWN) {
     if (cursorClicked)
       SDL_SetCursor(cursorClicked);
   } else
-  if (ev.type == SDL::SDL_MOUSEBUTTONUP) {
+  if (ev.type == SDL::SDL_EVENT_MOUSE_BUTTON_UP) {
     if (cursor)
       SDL_SetCursor(cursor);
   }
 }
 
 void Renderer::considerMouseMoveEvent(Event& ev) {
-  if (ev.type == SDL::SDL_MOUSEMOTION)
+  if (ev.type == SDL::SDL_EVENT_MOUSE_MOTION)
     mousePos = Vec2(ev.motion.x, ev.motion.y);
 }
 
@@ -906,14 +912,11 @@ bool Renderer::pollEvent(Event& ev) {
   CHECK(currentThreadId() == *renderThreadId);
   if (steamInput)
     if (auto e = steamInput->getEvent()) {
-      ev.type = SDL::SDL_KEYDOWN;
-      ev.key = SDL::SDL_KeyboardEvent {
-          ev.type,
-          0, 0,
-          SDL_PRESSED,
-          0, 0, 0,
-          SDL::SDL_Keysym { SDL::SDL_Scancode{} , (SDL::SDL_Keycode) *e }
-      };
+      ev.type = SDL::SDL_EVENT_KEY_DOWN;
+      memset(&ev.key, 0, sizeof(ev.key));
+      ev.key.type = SDL::SDL_EVENT_KEY_DOWN;
+      ev.key.down = true;
+      ev.key.key = (SDL::SDL_Keycode) *e;
       return true;
     }
   if (monkey) {
@@ -958,12 +961,12 @@ void Renderer::flushEvents(EventType type) {
 void Renderer::zoomMousePos(Event& ev) {
   auto zoom = getZoom();
   switch (ev.type) {
-    case SDL::SDL_MOUSEBUTTONUP:
-    case SDL::SDL_MOUSEBUTTONDOWN:
+    case SDL::SDL_EVENT_MOUSE_BUTTON_UP:
+    case SDL::SDL_EVENT_MOUSE_BUTTON_DOWN:
       ev.button.x /= zoom;
       ev.button.y /= zoom;
       break;
-    case SDL::SDL_MOUSEMOTION:
+    case SDL::SDL_EVENT_MOUSE_MOTION:
       ev.motion.x /= zoom;
       ev.motion.y /= zoom;
       break;
@@ -1004,9 +1007,7 @@ bool Renderer::isMonkey() {
 }
 
 SDL::SDL_Surface* flipVert(SDL::SDL_Surface* sfc) {
-   auto result = SDL::SDL_CreateRGBSurface(sfc->flags, sfc->w, sfc->h,
-     sfc->format->BytesPerPixel * 8, sfc->format->Rmask, sfc->format->Gmask,
-     sfc->format->Bmask, sfc->format->Amask);
+   auto result = SDL::SDL_CreateSurface(sfc->w, sfc->h, sfc->format);
    CHECK(result);
    std::uint8_t* pixels = (std::uint8_t*) sfc->pixels;
    std::uint8_t* rpixels = (std::uint8_t*) result->pixels;
@@ -1020,14 +1021,14 @@ SDL::SDL_Surface* flipVert(SDL::SDL_Surface* sfc) {
 }
 
 void Renderer::makeScreenshot(const FilePath& path, Rectangle bounds) {
-  auto image = SDL::SDL_CreateRGBSurface(SDL_SWSURFACE, bounds.width(), bounds.height(), 24, 0x000000FF, 0x0000FF00, 0x00FF0000, 0);
+  auto image = SDL::SDL_CreateSurface(bounds.width(), bounds.height(), SDL::SDL_PIXELFORMAT_RGB24);
   SDL::glReadBuffer(GL_FRONT);
   SDL::glReadPixels(bounds.left(), height - bounds.bottom(), bounds.width(), bounds.height(), GL_RGB, GL_UNSIGNED_BYTE, image->pixels);
   auto inverted = flipVert(image);
   unsigned error = lodepng::encode(path.getPath(), (unsigned char*)inverted->pixels, bounds.width(), bounds.height(), LCT_RGB);
   USER_CHECK(!error) << "encoder error " << error << ": "<< lodepng_error_text(error);
-  SDL_FreeSurface(image);
-  SDL_FreeSurface(inverted);
+  SDL_DestroySurface(image);
+  SDL_DestroySurface(inverted);
 }
 
 void playfile(const char *fname, SDL::SDL_Window* screen, Renderer&, float volume);

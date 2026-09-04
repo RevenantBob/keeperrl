@@ -184,6 +184,6 @@ class Renderer {
   Clock* clock;
   TileSet* tileSet = nullptr;
   MySteamInput* steamInput = nullptr;
-  bool keypressed[SDL::SDL_NUM_SCANCODES] = {0};
+  bool keypressed[SDL::SDL_SCANCODE_COUNT] = {0};
   void updateKeypressed(const Event&);
 };

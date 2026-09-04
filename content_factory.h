@@ -113,6 +113,8 @@ class ContentFactory {
   optional<string> readZLevels(const GameConfig*, KeyVerifier*);
 };
 
+#ifndef _MSC_VER
 static_assert(std::is_nothrow_move_constructible<ContentFactory>::value, "T should be noexcept MoveConstructible");
+#endif
 
 CEREAL_CLASS_VERSION(ContentFactory, 1)

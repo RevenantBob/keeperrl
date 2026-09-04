@@ -325,7 +325,7 @@ static int getNumFrames(const vector<FilePath>& files, int tileWidth) {
   bool firstError = true;
   for (int i : All(files))
     if (SDL::SDL_Surface* im = SDL::IMG_Load(files[i].getPath())) {
-      auto dest = OnExit([&] { SDL::SDL_FreeSurface(im); });
+      auto dest = OnExit([&] { SDL::SDL_DestroySurface(im); });
       ret += im->w / tileWidth;
     } else
     if (firstError) {
@@ -365,14 +365,14 @@ bool TileSet::loadTilesFromDir(const DirectoryPath& path, Vec2 size, bool overwr
   int rowLength = textureWidth / size.x;
   const auto numFrames = getNumFrames(files, size.x);
   SDL::SDL_Surface* image = Texture::createSurface(textureWidth, (numFrames / rowLength + 1) * size.y);
-  SDL::SDL_SetSurfaceBlendMode(image, SDL::SDL_BLENDMODE_NONE);
+  SDL::SDL_SetSurfaceBlendMode(image, SDL_BLENDMODE_NONE);
   CHECK(image) << SDL::SDL_GetError();
   int frameCount = 0;
   vector<pair<string, Vec2>> addedPositions;
   for (int i : All(files))
     if (SDL::SDL_Surface* im = SDL::IMG_Load(files[i].getPath())) {
-      auto dest = OnExit([&] { SDL::SDL_FreeSurface(im); });
-      SDL::SDL_SetSurfaceBlendMode(im, SDL::SDL_BLENDMODE_NONE);
+      auto dest = OnExit([&] { SDL::SDL_DestroySurface(im); });
+      SDL::SDL_SetSurfaceBlendMode(im, SDL_BLENDMODE_NONE);
       USER_CHECK(im) << files[i] << ": "<< SDL::IMG_GetError();
       USER_CHECK((im->w % size.x == 0) && im->h == size.y) << files[i] << " has wrong size " << im->w << " " << im->h;
       string fileName = files[i].getFileName();
@@ -413,7 +413,7 @@ bool TileSet::loadTilesFromDir(const DirectoryPath& path, Vec2 size, bool overwr
 void TileSet::loadTextures() {
   for (auto& elem : texturesTmp) {
     textures.push_back(make_unique<Texture>(elem.image));
-    SDL::SDL_FreeSurface(elem.image);
+    SDL::SDL_DestroySurface(elem.image);
     for (auto& pos : elem.addedPositions)
       for (auto& coord : tileCoords[pos.first])
         coord.texture = textures.back().get();

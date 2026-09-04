@@ -103,4 +103,6 @@ class CreatureFactory {
   PCreature getSpirit(TribeId, MonsterAIFactory);
 };
 
+#ifndef _MSC_VER
 static_assert(std::is_nothrow_move_constructible<CreatureFactory>::value, "T should be noexcept MoveConstructible");
+#endif

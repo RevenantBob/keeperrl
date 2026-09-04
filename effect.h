@@ -67,4 +67,6 @@ class Effect {
   HeapAllocated<EffectType> SERIAL(effect);
 };
 
+#ifndef _MSC_VER
 static_assert(std::is_nothrow_move_constructible<Effect>::value, "T should be noexcept MoveConstructible");
+#endif

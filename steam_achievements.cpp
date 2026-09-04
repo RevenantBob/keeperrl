@@ -1,6 +1,8 @@
 #include "steam_achievements.h"
 #include "achievement_id.h"
 
+#ifdef USE_STEAMWORKS
+
 #include "extern/steamworks/public/steam/isteamuserstats.h"
 #include "extern/steamworks/public/steam/isteamuser.h"
 
@@ -18,3 +20,11 @@ void SteamAchievements::achieve(AchievementId id) {
     stats->StoreStats();
   }
 }
+
+#else // USE_STEAMWORKS
+
+// No Steamworks SDK available in this build -- achievements are a no-op.
+SteamAchievements::SteamAchievements() {}
+void SteamAchievements::achieve(AchievementId) {}
+
+#endif // USE_STEAMWORKS

@@ -157,15 +157,15 @@ class ReleaseButton : public GuiElem {
 };
 
 bool GuiFactory::isShift(const SDL_Keysym& key) {
-  return key.mod & (SDL::KMOD_LSHIFT | SDL::KMOD_RSHIFT);
+  return key.mod & (SDL_KMOD_LSHIFT | SDL_KMOD_RSHIFT);
 }
 
 bool GuiFactory::isCtrl(const SDL_Keysym& key) {
-  return key.mod & (SDL::KMOD_LCTRL | SDL::KMOD_RCTRL);
+  return key.mod & (SDL_KMOD_LCTRL | SDL_KMOD_RCTRL);
 }
 
 bool GuiFactory::isAlt(const SDL_Keysym& key) {
-  return key.mod & (SDL::KMOD_LALT | SDL::KMOD_RALT);
+  return key.mod & (SDL_KMOD_LALT | SDL_KMOD_RALT);
 }
 
 bool GuiFactory::keyEventEqual(const SDL_Keysym& k1, const SDL_Keysym& k2) {
@@ -274,16 +274,16 @@ class TextFieldElem : public GuiElem {
     if (isFocused()) {
       auto current = getText();
       switch (sym.sym) {
-        case SDL::SDLK_BACKSPACE: {
+        case SDLK_BACKSPACE: {
           if (!current.empty())
             current.pop_back();
           callback(current);
           break;
         }
         case C_BUILDINGS_CANCEL:
-        case SDL::SDLK_ESCAPE:
-        case SDL::SDLK_KP_ENTER:
-        case SDL::SDLK_RETURN:
+        case SDLK_ESCAPE:
+        case SDLK_KP_ENTER:
+        case SDLK_RETURN:
           callback(current);
           focused = false;
           if (!alwaysFocused && steamInput)
@@ -3149,11 +3149,11 @@ class TextInputElem : public GuiElem {
   public:
   TextInputElem(int width, int maxLines, shared_ptr<string> text)
       : width(width), maxLines(maxLines), text(std::move(text)) {
-    SDL::SDL_StartTextInput();
+    SDL::SDL_StartTextInput(keeperrlMainWindow);
   }
 
   ~TextInputElem() {
-    SDL::SDL_StopTextInput();
+    SDL::SDL_StopTextInput(keeperrlMainWindow);
   }
 
 
@@ -3187,7 +3187,7 @@ class TextInputElem : public GuiElem {
   }
 
   virtual bool onKeyPressed2(SDL::SDL_Keysym key) override {
-    if (key.sym == SDL::SDLK_BACKSPACE) {
+    if (key.sym == SDLK_BACKSPACE) {
       if (!text->empty())
         text->pop_back();
       return true;
@@ -3344,13 +3344,13 @@ void GuiFactory::propagateScrollEvent(const vector<SGuiElem>& guiElems) {
 void GuiFactory::propagateEvent(const Event& event, const vector<SGuiElem>& guiElems) {
   propagateScrollEvent(guiElems);
   switch (event.type) {
-    case SDL::SDL_MOUSEBUTTONUP:
+    case SDL::SDL_EVENT_MOUSE_BUTTON_UP:
       for (auto elem : guiElems)
         if (elem->onClick(MouseButtonId::RELEASED, Vec2(event.button.x, event.button.y)))
           break;
       dragContainer.pop();
       break;
-    case SDL::SDL_MOUSEMOTION: {
+    case SDL::SDL_EVENT_MOUSE_MOTION: {
       bool captured = false;
       for (auto elem : guiElems)
         if (!captured)
@@ -3359,7 +3359,7 @@ void GuiFactory::propagateEvent(const Event& event, const vector<SGuiElem>& guiE
         else
           elem->onMouseGone();
       break;}
-    case SDL::SDL_MOUSEBUTTONDOWN: {
+    case SDL::SDL_EVENT_MOUSE_BUTTON_DOWN: {
       Vec2 clickPos(event.button.x, event.button.y);
       for (auto elem : guiElems) {
         if (event.button.button == SDL_BUTTON_RIGHT && elem->onClick(MouseButtonId::RIGHT, clickPos))
@@ -3371,17 +3371,17 @@ void GuiFactory::propagateEvent(const Event& event, const vector<SGuiElem>& guiE
       }
       break;
     }
-    case SDL::SDL_TEXTINPUT:
+    case SDL::SDL_EVENT_TEXT_INPUT:
       for (auto elem : guiElems)
         if (elem->onTextInput(event.text.text))
           break;
       break;
-    case SDL::SDL_KEYDOWN:
+    case SDL::SDL_EVENT_KEY_DOWN:
       for (auto elem : guiElems)
-        if (elem->onKeyPressed2(event.key.keysym))
+        if (elem->onKeyPressed2(SDL::SDL_Keysym{event.key.scancode, event.key.key, event.key.mod}))
           break;
       break;
-    case SDL::SDL_MOUSEWHEEL:
+    case SDL::SDL_EVENT_MOUSE_WHEEL:
       for (auto elem : guiElems)
         if (elem->onClick(event.wheel.y > 0 ? MouseButtonId::WHEEL_UP : MouseButtonId::WHEEL_DOWN, renderer.getMousePos()))
           break;

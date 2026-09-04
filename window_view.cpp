@@ -458,7 +458,7 @@ Vec2 WindowView::getOverlayPosition(GuiBuilder::OverlayInfo::Alignment alignment
 
 void WindowView::propagateMousePosition(const vector<SGuiElem>& elems) {
   Event ev;
-  ev.type = SDL::SDL_MOUSEMOTION;
+  ev.type = SDL::SDL_EVENT_MOUSE_MOTION;
   ev.motion.x = renderer.getMousePos().x;
   ev.motion.y = renderer.getMousePos().y;
   ev.motion.xrel = 0;
@@ -635,12 +635,12 @@ optional<Vec2> WindowView::chooseDirection(Vec2 playerPos, const TString& messag
         : (mapGui->projectOnMap(renderer.getMousePos()).value_or(playerPos) - playerPos).getBearing();
     while (renderer.pollEvent(event)) {
       considerResizeEvent(event);
-      if (event.type == SDL::SDL_MOUSEMOTION)
+      if (event.type == SDL::SDL_EVENT_MOUSE_MOTION)
         useController = false;
-      if (event.type == SDL::SDL_KEYDOWN) {
+      if (event.type == SDL::SDL_EVENT_KEY_DOWN) {
         refreshScreen();
-        switch (event.key.keysym.sym) {
-          case SDL::SDLK_ESCAPE:
+        switch (event.key.key) {
+          case SDLK_ESCAPE:
           case C_BUILDINGS_CANCEL:
             return none;
           case C_BUILDINGS_CONFIRM:
@@ -650,28 +650,28 @@ optional<Vec2> WindowView::chooseDirection(Vec2 playerPos, const TString& messag
           default:
             break;
         }
-        if (gui.getKeybindingMap()->matches(Keybinding("WALK_NORTH"), event.key.keysym) ||
-            gui.getKeybindingMap()->matches(Keybinding("WALK_NORTH2"), event.key.keysym))
+        if (gui.getKeybindingMap()->matches(Keybinding("WALK_NORTH"), SDL::SDL_Keysym{event.key.scancode, event.key.key, event.key.mod}) ||
+            gui.getKeybindingMap()->matches(Keybinding("WALK_NORTH2"), SDL::SDL_Keysym{event.key.scancode, event.key.key, event.key.mod}))
           return Vec2(0, -1);
-        if (gui.getKeybindingMap()->matches(Keybinding("WALK_SOUTH"), event.key.keysym) ||
-            gui.getKeybindingMap()->matches(Keybinding("WALK_SOUTH2"), event.key.keysym))
+        if (gui.getKeybindingMap()->matches(Keybinding("WALK_SOUTH"), SDL::SDL_Keysym{event.key.scancode, event.key.key, event.key.mod}) ||
+            gui.getKeybindingMap()->matches(Keybinding("WALK_SOUTH2"), SDL::SDL_Keysym{event.key.scancode, event.key.key, event.key.mod}))
           return Vec2(0, 1);
-        if (gui.getKeybindingMap()->matches(Keybinding("WALK_WEST"), event.key.keysym) ||
-            gui.getKeybindingMap()->matches(Keybinding("WALK_WEST2"), event.key.keysym))
+        if (gui.getKeybindingMap()->matches(Keybinding("WALK_WEST"), SDL::SDL_Keysym{event.key.scancode, event.key.key, event.key.mod}) ||
+            gui.getKeybindingMap()->matches(Keybinding("WALK_WEST2"), SDL::SDL_Keysym{event.key.scancode, event.key.key, event.key.mod}))
           return Vec2(-1, 0);
-        if (gui.getKeybindingMap()->matches(Keybinding("WALK_EAST"), event.key.keysym) ||
-            gui.getKeybindingMap()->matches(Keybinding("WALK_EAST2"), event.key.keysym))
+        if (gui.getKeybindingMap()->matches(Keybinding("WALK_EAST"), SDL::SDL_Keysym{event.key.scancode, event.key.key, event.key.mod}) ||
+            gui.getKeybindingMap()->matches(Keybinding("WALK_EAST2"), SDL::SDL_Keysym{event.key.scancode, event.key.key, event.key.mod}))
           return Vec2(1, 0);
-        if (gui.getKeybindingMap()->matches(Keybinding("WALK_NORTH_WEST"), event.key.keysym))
+        if (gui.getKeybindingMap()->matches(Keybinding("WALK_NORTH_WEST"), SDL::SDL_Keysym{event.key.scancode, event.key.key, event.key.mod}))
           return Vec2(-1, -1);
-        if (gui.getKeybindingMap()->matches(Keybinding("WALK_NORTH_EAST"), event.key.keysym))
+        if (gui.getKeybindingMap()->matches(Keybinding("WALK_NORTH_EAST"), SDL::SDL_Keysym{event.key.scancode, event.key.key, event.key.mod}))
           return Vec2(1, -1);
-        if (gui.getKeybindingMap()->matches(Keybinding("WALK_SOUTH_WEST"), event.key.keysym))
+        if (gui.getKeybindingMap()->matches(Keybinding("WALK_SOUTH_WEST"), SDL::SDL_Keysym{event.key.scancode, event.key.key, event.key.mod}))
           return Vec2(-1, 1);
-        if (gui.getKeybindingMap()->matches(Keybinding("WALK_SOUTH_EAST"), event.key.keysym))
+        if (gui.getKeybindingMap()->matches(Keybinding("WALK_SOUTH_EAST"), SDL::SDL_Keysym{event.key.scancode, event.key.key, event.key.mod}))
           return Vec2(1, 1);
       }
-      if (chosenDir != Vec2(0, 0) && event.type == SDL::SDL_MOUSEBUTTONDOWN) {
+      if (chosenDir != Vec2(0, 0) && event.type == SDL::SDL_EVENT_MOUSE_BUTTON_DOWN) {
         if (event.button.button == SDL_BUTTON_LEFT)
           return chosenDir;
         else
@@ -695,7 +695,7 @@ optional<Vec2> WindowView::chooseDirection(Vec2 playerPos, const TString& messag
     /*if (auto *inst = fx::FXManager::getInstance())
       inst->simulateStableTime(double(clock->getRealMillis().count()) * 0.001);*/
     renderer.drawAndClearBuffer();
-    //renderer.flushEvents(SDL::SDL_MOUSEMOTION);
+    //renderer.flushEvents(SDL::SDL_EVENT_MOUSE_MOTION);
   } while (1);
   });
   return returnQueue.pop();
@@ -718,30 +718,30 @@ View::TargetResult WindowView::chooseTarget(Vec2 playerPos, TargetType targetTyp
     Event event;
     while (renderer.pollEvent(event)) {
       considerResizeEvent(event);
-      if (event.type == SDL::SDL_KEYDOWN) {
-        if (gui.getKeybindingMap()->matches(Keybinding("EXIT_MENU"), event.key.keysym)) {
+      if (event.type == SDL::SDL_EVENT_KEY_DOWN) {
+        if (gui.getKeybindingMap()->matches(Keybinding("EXIT_MENU"), SDL::SDL_Keysym{event.key.scancode, event.key.key, event.key.mod})) {
           refreshScreen();
           return none;
         }
-        else if (cycleKey && gui.getKeybindingMap()->matches(*cycleKey, event.key.keysym))
+        else if (cycleKey && gui.getKeybindingMap()->matches(*cycleKey, SDL::SDL_Keysym{event.key.scancode, event.key.key, event.key.mod}))
           return *cycleKey;
-        else if (gui.getKeybindingMap()->matches(Keybinding("MENU_SELECT"), event.key.keysym)) {
+        else if (gui.getKeybindingMap()->matches(Keybinding("MENU_SELECT"), SDL::SDL_Keysym{event.key.scancode, event.key.key, event.key.mod})) {
           if (!!pos && (targetType != TargetType::POSITION ||
               (pos->inRectangle(passable.getBounds()) && passable[*pos] == PassableInfo::PASSABLE)))
             return *pos;
         }
-        else if (gui.getKeybindingMap()->matches(Keybinding("MENU_UP"), event.key.keysym))
+        else if (gui.getKeybindingMap()->matches(Keybinding("MENU_UP"), SDL::SDL_Keysym{event.key.scancode, event.key.key, event.key.mod}))
           controllerPos = controllerPos.value_or(playerPos) + Vec2(0, -1);
-        else if (gui.getKeybindingMap()->matches(Keybinding("MENU_DOWN"), event.key.keysym))
+        else if (gui.getKeybindingMap()->matches(Keybinding("MENU_DOWN"), SDL::SDL_Keysym{event.key.scancode, event.key.key, event.key.mod}))
           controllerPos = controllerPos.value_or(playerPos) + Vec2(0, 1);
-        else if (gui.getKeybindingMap()->matches(Keybinding("MENU_LEFT"), event.key.keysym))
+        else if (gui.getKeybindingMap()->matches(Keybinding("MENU_LEFT"), SDL::SDL_Keysym{event.key.scancode, event.key.key, event.key.mod}))
           controllerPos = controllerPos.value_or(playerPos) + Vec2(-1, 0);
-        else if (gui.getKeybindingMap()->matches(Keybinding("MENU_RIGHT"), event.key.keysym))
+        else if (gui.getKeybindingMap()->matches(Keybinding("MENU_RIGHT"), SDL::SDL_Keysym{event.key.scancode, event.key.key, event.key.mod}))
           controllerPos = controllerPos.value_or(playerPos) + Vec2(1, 0);
       }
-      if (event.type == SDL::SDL_MOUSEMOTION)
+      if (event.type == SDL::SDL_EVENT_MOUSE_MOTION)
         controllerPos = none;
-      if (pos && event.type == SDL::SDL_MOUSEBUTTONDOWN) {
+      if (pos && event.type == SDL::SDL_EVENT_MOUSE_BUTTON_DOWN) {
         if (event.button.button == SDL_BUTTON_LEFT && (targetType != TargetType::POSITION ||
             (pos->inRectangle(passable.getBounds()) && passable[*pos] == PassableInfo::PASSABLE)))
           return *pos;
@@ -803,7 +803,7 @@ View::TargetResult WindowView::chooseTarget(Vec2 playerPos, TargetType targetTyp
     }
     renderer.drawAndClearBuffer();
     // Not sure what this was for but it interfered with switching the mode from keyboard to mouse.
-    //renderer.flushEvents(SDL::SDL_MOUSEMOTION);
+    //renderer.flushEvents(SDL::SDL_EVENT_MOUSE_MOTION);
   } while (1);
   });
   guiBuilder.disableClickActions = false;
@@ -940,9 +940,9 @@ bool WindowView::isClockStopped() {
 bool WindowView::considerResizeEvent(const Event& event, bool withBugReportEvent) {
   if (withBugReportEvent && considerBugReportEvent(event))
     return true;
-  if (event.type == SDL::SDL_QUIT)
+  if (event.type == SDL::SDL_EVENT_QUIT)
     throw GameExitException();
-  if (event.type == SDL::SDL_WINDOWEVENT && event.window.event == SDL::SDL_WINDOWEVENT_RESIZED) {
+  if (event.type == SDL::SDL_EVENT_WINDOW_RESIZED) {
     resize(event.window.data1, event.window.data2);
     return true;
   }
@@ -970,7 +970,7 @@ string WindowView::translate(const TString& s) const {
 }
 
 bool WindowView::considerBugReportEvent(const Event& event) {
-  if (event.type == SDL::SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT &&
+  if (event.type == SDL::SDL_EVENT_MOUSE_BUTTON_DOWN && event.button.button == SDL_BUTTON_LEFT &&
       Vec2(event.button.x, event.button.y).inRectangle(getBugReportPos(renderer))) {
     bool exit = false;
     optional<GuiBuilder::BugReportInfo> bugreportInfo;
@@ -1035,15 +1035,15 @@ void WindowView::processEvents() {
     considerResizeEvent(event);
     if (gameInfo.infoType == GameInfo::InfoType::SPECTATOR)
       switch (event.type) {
-        case SDL::SDL_KEYDOWN:
-        case SDL::SDL_MOUSEWHEEL:
-        case SDL::SDL_MOUSEBUTTONDOWN:
+        case SDL::SDL_EVENT_KEY_DOWN:
+        case SDL::SDL_EVENT_MOUSE_WHEEL:
+        case SDL::SDL_EVENT_MOUSE_BUTTON_DOWN:
           inputQueue.push(UserInput(UserInputId::EXIT));
           return;
         default:break;
       }
     else {
-      if (event.type == SDL::SDL_KEYDOWN && renderDialog.empty() && blockingElems.empty()) {
+      if (event.type == SDL::SDL_EVENT_KEY_DOWN && renderDialog.empty() && blockingElems.empty()) {
         if (lockKeyboard)
           return;
         lockKeyboard = true;
@@ -1051,18 +1051,18 @@ void WindowView::processEvents() {
       propagateEvent(event, clickableGuiElems);
     }
     switch (event.type) {
-      case SDL::SDL_KEYDOWN:
+      case SDL::SDL_EVENT_KEY_DOWN:
         if (gameInfo.infoType == GameInfo::InfoType::PLAYER)
-          renderer.flushEvents(SDL::SDL_KEYDOWN);
+          renderer.flushEvents(SDL::SDL_EVENT_KEY_DOWN);
         break;
-      case SDL::SDL_MOUSEMOTION:
+      case SDL::SDL_EVENT_MOUSE_MOTION:
         guiBuilder.mouseGone = false;
         break;
-      case SDL::SDL_MOUSEBUTTONDOWN:
+      case SDL::SDL_EVENT_MOUSE_BUTTON_DOWN:
         if (event.button.button == SDL_BUTTON_RIGHT)
           gui.getDragContainer().pop();
         break;
-      case SDL::SDL_MOUSEBUTTONUP:
+      case SDL::SDL_EVENT_MOUSE_BUTTON_UP:
         if (event.button.button == SDL_BUTTON_LEFT) {
           if (auto building = guiBuilder.getActiveButton())
             inputQueue.push(UserInput(UserInputId::RECT_CONFIRM, BuildingClickInfo{Vec2(0, 0), *building}));
@@ -1080,11 +1080,11 @@ void WindowView::propagateEvent(const Event& event, vector<SGuiElem> guiElems) {
   if (gameReady)
     guiBuilder.clearHint();
   switch (event.type) {
-    case SDL::SDL_MOUSEBUTTONUP:
+    case SDL::SDL_EVENT_MOUSE_BUTTON_UP:
       // MapGui needs this event otherwise it will sometimes lock the mouse button
       mapGui->onClick(MouseButtonId::RELEASED, Vec2(event.button.x, event.button.y));
       break;
-    case SDL::SDL_MOUSEBUTTONDOWN:
+    case SDL::SDL_EVENT_MOUSE_BUTTON_DOWN:
       lockKeyboard = true;
       break;
     default:break;
@@ -1096,7 +1096,7 @@ void WindowView::propagateEvent(const Event& event, vector<SGuiElem> guiElems) {
 void WindowView::keyboardActionAlways(const SDL_Keysym& key) {
   if (debugOptions)
     switch (key.sym) {
-      case SDL::SDLK_F8:
+      case SDLK_F8:
         //renderer.startMonkey();
         renderer.loadAnimations();
         renderer.getTileSet().clear();
@@ -1118,25 +1118,25 @@ void WindowView::keyboardAction(const SDL_Keysym& key) {
   keyboardActionAlways(key);
   if (debugOptions)
     switch (key.sym) {
-      case SDL::SDLK_F10:
+      case SDLK_F10:
         if (auto input = getText(TString("Enter effect"_s), "", 100))
           inputQueue.push({UserInputId::APPLY_EFFECT, *input});
         break;
-      case SDL::SDLK_F11:
+      case SDLK_F11:
         if (auto input = getText(TString("Enter item type"_s), "", 100))
           inputQueue.push({UserInputId::CREATE_ITEM, *input});
         break;
-      case SDL::SDLK_F12:
+      case SDLK_F12:
         if (auto input = getText(TString("Enter creature id"_s), "", 100))
           inputQueue.push({UserInputId::SUMMON_ENEMY, *input});
         break;
-      case SDL::SDLK_F9:
+      case SDLK_F9:
         inputQueue.push(UserInputId::CHEAT_ATTRIBUTES);
         break;
-      /*case SDL::SDLK_F7:
+      /*case SDLK_F7:
         presentList("", vector<string>(messageLog.begin(), messageLog.end()), true);
         break;
-      case SDL::SDLK_F2:
+      case SDLK_F2:
         if (!renderer.isMonkey()) {
           options->handle(this, OptionSet::GENERAL);
           refreshScreen();
@@ -1145,7 +1145,7 @@ void WindowView::keyboardAction(const SDL_Keysym& key) {
     }
   switch (key.sym) {
     case C_OPEN_MENU:
-    case SDL::SDLK_ESCAPE:
+    case SDLK_ESCAPE:
       if (!guiBuilder.clearActiveButton() && !renderer.isMonkey())
         inputQueue.push(UserInput(UserInputId::EXIT));
       break;

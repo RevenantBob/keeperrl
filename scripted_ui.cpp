@@ -170,9 +170,9 @@ struct KeyCatcher : ScriptedUIInterface {
 
   void onKeypressed(const ScriptedUIData& data, ScriptedContext& context,
       SDL::SDL_Keysym sym, Rectangle, EventCallback& callback) const override {
-    if (sym.sym == SDL::SDLK_LCTRL || sym.sym == SDL::SDLK_RCTRL ||
-        sym.sym == SDL::SDLK_LALT || sym.sym == SDL::SDLK_RALT ||
-        sym.sym == SDL::SDLK_LSHIFT || sym.sym == SDL::SDLK_RSHIFT)
+    if (sym.sym == SDLK_LCTRL || sym.sym == SDLK_RCTRL ||
+        sym.sym == SDLK_LALT || sym.sym == SDLK_RALT ||
+        sym.sym == SDLK_LSHIFT || sym.sym == SDLK_RSHIFT)
       return;
     if (auto c = data.getReferenceMaybe<ScriptedUIDataElems::KeyCatcherCallback>()) {
       c->fun(sym);
@@ -266,7 +266,7 @@ struct BlockKeyEvents : ScriptedUIInterface {
 
   void onKeypressed(const ScriptedUIData&, ScriptedContext&,
       SDL::SDL_Keysym sym, Rectangle, EventCallback& callback) const override {
-    if (sym.sym != SDL::SDLK_F8)
+    if (sym.sym != SDLK_F8)
       callback = [] { return false; };
   }
 };

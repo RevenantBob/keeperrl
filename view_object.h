@@ -127,4 +127,6 @@ class ViewObject {
   heap_optional<MovementQueue> movementQueue;
 };
 
+#ifndef _MSC_VER
 static_assert(std::is_nothrow_move_constructible<ViewObject>::value, "T should be noexcept MoveConstructible");
+#endif

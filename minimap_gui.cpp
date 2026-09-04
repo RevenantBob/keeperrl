@@ -113,8 +113,8 @@ void MinimapGui::update(Rectangle bounds, const CreatureView* creature, Renderer
         }
   };
   if (currentLevel != level) {
-    int col = SDL_MapRGBA(mapBuffer->format, 0, 0, 0, 1);
-    SDL_FillRect(mapBuffer, nullptr, col);
+    int col = SDL_MapRGBA(SDL_GetPixelFormatDetails(mapBuffer->format), nullptr, 0, 0, 0, 1);
+    SDL_FillSurfaceRect(mapBuffer, nullptr, col);
     info.roads.clear();
     for (Position v : level->getAllPositions())
       updatePos(v);

@@ -131,8 +131,10 @@ const vector<Item*>& Inventory::getItems(CollectiveResourceId id) const {
   if (isEmpty()) {
     return empty;
   }
-  if (index >= resourceIndexes.size())
-    resourceIndexes.resize(index + 1);
+  // Plain resize() doesn't work here: IndexedVector is move-only, and MSVC's
+  // std::vector::resize() implementation needs a copy constructor for growth.
+  while (index >= resourceIndexes.size())
+    resourceIndexes.emplace_back();
   auto& elems = resourceIndexes[index];
   if (!elems) {
     elems.emplace();

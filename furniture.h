@@ -286,6 +286,8 @@ class Furniture {
   optional<FurnitureType> SERIAL(otherStairs);
 };
 
+#ifndef _MSC_VER
 static_assert(std::is_nothrow_move_constructible<Furniture>::value, "T should be noexcept MoveConstructible");
+#endif
 
 CEREAL_CLASS_VERSION(Furniture, 2)

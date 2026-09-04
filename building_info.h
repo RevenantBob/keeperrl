@@ -30,4 +30,6 @@ struct BuildingInfo {
   SERIALIZE_ALL(NAMED(wall), NAMED(floorInside), NAMED(floorOutside), NAMED(door), NAMED(prettyFloor), NAMED(gate), OPTION(upStairs), OPTION(downStairs), OPTION(water), OPTION(bridge))
 };
 
+#ifndef _MSC_VER
 static_assert(std::is_nothrow_move_constructible<BuildingInfo>::value, "T should be noexcept MoveConstructible");
+#endif

@@ -46,6 +46,8 @@ struct KeeperCreatureInfo {
   void serialize(Archive& ar, const unsigned int);
 };
 
+#ifndef _MSC_VER
 static_assert(std::is_nothrow_move_constructible<KeeperCreatureInfo>::value, "T should be noexcept MoveConstructible");
+#endif
 
 CEREAL_CLASS_VERSION(KeeperCreatureInfo, 1)

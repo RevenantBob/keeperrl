@@ -3888,8 +3888,8 @@ SGuiElem GuiBuilder::drawMinionButtons(const vector<PlayerInfo>& minions1, Uniqu
     };
   };
   return WL(stack,
-      WL(keyHandler, getFocusFunc(1), {gui.getKey(C_BUILDINGS_DOWN), gui.getKey(SDL::SDLK_DOWN)}, true),
-      WL(keyHandler, getFocusFunc(-1), {gui.getKey(C_BUILDINGS_UP), gui.getKey(SDL::SDLK_UP)}, true),
+      WL(keyHandler, getFocusFunc(1), {gui.getKey(C_BUILDINGS_DOWN), gui.getKey(SDLK_DOWN)}, true),
+      WL(keyHandler, getFocusFunc(-1), {gui.getKey(C_BUILDINGS_UP), gui.getKey(SDLK_UP)}, true),
       WL(scrollable, WL(rightMargin, 10, list.buildVerticalList()), &minionButtonsScroll, &scrollbarsHeld)
   );
 }

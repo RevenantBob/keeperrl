@@ -567,7 +567,7 @@ void Options::handle(View* view, const ContentFactory* factory, OptionSet set, i
           {"key", ScriptedUIDataElems::Label{keybindingMap->getText(key.first).value_or(TString())}},
           {"clicked", ScriptedUIDataElems::Callback { [&wasSet, key, view, this] {
             auto captured = captureKey(view, key.second.name);
-            if (captured && captured->sym != SDL::SDLK_ESCAPE)
+            if (captured && captured->sym != SDLK_ESCAPE)
                keybindingMap->set(key.first, *captured);
             wasSet = true;
             return true;

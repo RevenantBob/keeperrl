@@ -32,7 +32,7 @@ struct ModDetails;
 class TribeId;
 struct RetiredModelInfo;
 class Unlocks;
-class SteamAchievements;
+struct SteamAchievements;
 class TString;
 class Translations;
 

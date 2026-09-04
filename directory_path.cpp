@@ -1,10 +1,16 @@
 #include "stdafx.h"
 #include "directory_path.h"
 #include "file_path.h"
+#include <cerrno>
+#ifdef WINDOWS
+#include <direct.h>
+#include <windows.h>
+#else
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include "dirent.h"
+#endif
 
 DirectoryPath::DirectoryPath(string p) : path(std::move(p)) {
 }
@@ -17,6 +23,20 @@ DirectoryPath DirectoryPath::subdirectory(const std::string& s) const {
   return DirectoryPath(path + "/" + s);
 }
 
+#ifdef WINDOWS
+
+static bool isDirectory(const string& path) {
+  DWORD attrs = GetFileAttributesA(path.c_str());
+  return attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY);
+}
+
+static bool isRegularFile(const string& path) {
+  DWORD attrs = GetFileAttributesA(path.c_str());
+  return attrs != INVALID_FILE_ATTRIBUTES && !(attrs & FILE_ATTRIBUTE_DIRECTORY);
+}
+
+#else
+
 static bool isDirectory(const string& path) {
   struct stat path_stat;
   if (stat(path.c_str(), &path_stat))
@@ -24,6 +44,16 @@ static bool isDirectory(const string& path) {
   else
     return S_ISDIR(path_stat.st_mode);
 }
+
+static bool isRegularFile(const string& path) {
+  struct stat path_stat;
+  if (stat(path.c_str(), &path_stat))
+    return false;
+  else
+    return S_ISREG(path_stat.st_mode);
+}
+
+#endif
 
 bool DirectoryPath::exists() const {
   return isDirectory(getPath());
@@ -34,7 +64,7 @@ void DirectoryPath::createIfDoesntExist() const {
 #ifndef WINDOWS
     USER_CHECK(!mkdir(path.data(), 0750)) << "Unable to create directory \"" + path + "\": " + strerror(errno);
 #else
-    USER_CHECK(!mkdir(path.data())) << "Unable to create directory \"" + path + "\": " + strerror(errno);
+    USER_CHECK(!_mkdir(path.data())) << "Unable to create directory \"" + path + "\": " + strerror(errno);
 #endif
   }
 }
@@ -45,17 +75,46 @@ void DirectoryPath::removeRecursively() const {
       remove(file.getPath());
     for (auto subdir : getSubDirs())
       subdirectory(subdir).removeRecursively();
+#ifdef WINDOWS
+    _rmdir(getPath());
+#else
     rmdir(getPath());
+#endif
   }
 }
 
-static bool isRegularFile(const string& path) {
-  struct stat path_stat;
-  if (stat(path.c_str(), &path_stat))
-    return false;
-  else
-    return S_ISREG(path_stat.st_mode);
+#ifdef WINDOWS
+
+vector<FilePath> DirectoryPath::getFiles() const {
+  vector<FilePath> ret;
+  WIN32_FIND_DATAA data;
+  HANDLE h = FindFirstFileA((path + "/*").c_str(), &data);
+  if (h != INVALID_HANDLE_VALUE) {
+    do {
+      if (!(data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
+        ret.push_back(FilePath(*this, data.cFileName));
+    } while (FindNextFileA(h, &data));
+    FindClose(h);
+  }
+  return ret;
 }
+
+vector<string> DirectoryPath::getSubDirs() const {
+  vector<string> ret;
+  WIN32_FIND_DATAA data;
+  HANDLE h = FindFirstFileA((path + "/*").c_str(), &data);
+  if (h != INVALID_HANDLE_VALUE) {
+    do {
+      if ((data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) &&
+          strcmp(data.cFileName, ".") && strcmp(data.cFileName, ".."))
+        ret.push_back(data.cFileName);
+    } while (FindNextFileA(h, &data));
+    FindClose(h);
+  }
+  return ret;
+}
+
+#else
 
 vector<FilePath> DirectoryPath::getFiles() const {
   vector<FilePath> ret;
@@ -78,6 +137,8 @@ vector<string> DirectoryPath::getSubDirs() const {
   }
   return ret;
 }
+
+#endif
 
 const char* DirectoryPath::getPath() const {
   return path.data();
@@ -108,7 +169,11 @@ string getAbsolute(const char* path) {
 
 DirectoryPath DirectoryPath::current() {
   char buffer[2048];
+#ifdef WINDOWS
+  char* name = _getcwd(buffer, sizeof(buffer) - 1);
+#else
   char* name = getcwd(buffer, sizeof(buffer) - 1);
+#endif
   CHECK(name && "getcwd error");
   return DirectoryPath(name);
 }

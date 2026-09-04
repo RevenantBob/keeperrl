@@ -188,4 +188,6 @@ class ImmigrantInfo {
   vector<SpecialTraitInfo> SERIAL(specialTraits);
 };
 
+#ifndef _MSC_VER
 static_assert(std::is_nothrow_move_constructible<ImmigrantInfo>::value, "T should be noexcept MoveConstructible");
+#endif

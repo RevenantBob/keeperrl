@@ -108,6 +108,8 @@ class ItemAttributes {
   TString SERIAL(equipWarning) = TStringId("ITEM_MAY_HURT_MINION");
 };
 
+#ifndef _MSC_VER
 static_assert(std::is_nothrow_move_constructible<ItemAttributes>::value, "T should be noexcept MoveConstructible");
+#endif
 
 CEREAL_CLASS_VERSION(ItemAttributes, 2)

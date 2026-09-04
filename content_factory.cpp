@@ -201,8 +201,9 @@ optional<string> ContentFactory::readBuildingInfo(const GameConfig* config, KeyV
 }
 
 static Color getpixel(SDL::SDL_Surface *surface, int x, int y) {
+  auto formatDetails = SDL::SDL_GetPixelFormatDetails(surface->format);
   auto get = [&]() -> SDL::Uint32 {
-    int bpp = surface->format->BytesPerPixel;
+    int bpp = formatDetails->bytes_per_pixel;
     Uint8 *p = (Uint8 *)surface->pixels + y * surface->pitch + x * bpp;
     switch (bpp) {
       case 1:
@@ -221,7 +222,7 @@ static Color getpixel(SDL::SDL_Surface *surface, int x, int y) {
     }
   };
   Color ret;
-  SDL::SDL_GetRGB(get(), surface->format, &ret.r, &ret.g, &ret.b);
+  SDL::SDL_GetRGB(get(), formatDetails, nullptr, &ret.r, &ret.g, &ret.b);
   return ret;
 }
 
@@ -257,7 +258,7 @@ static optional<string> readMapLayouts(MapLayouts& layouts, KeyVerifier& keyVeri
           else if (color != Color(128, 128, 128))
             return "Unrecognized color in "_s +  file.getPath() + ": " + toString(color);
         }
-        SDL::SDL_FreeSurface(im);
+        SDL::SDL_DestroySurface(im);
         auto id = MapLayoutId(subdir.data());
         keyVerifier.addKey<MapLayoutId>(subdir.data());
         if (auto error = layouts.addLayout(id, std::move(layout)))

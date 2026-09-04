@@ -23,7 +23,7 @@ Texture::Texture(const FilePath& fileName) : path(fileName) {
   CHECK(image) << SDL::IMG_GetError();
   if (auto error = loadFromMaybe(image))
     FATAL << "Couldn't load image: " << fileName << ". Error code " << toString(*error);
-  SDL::SDL_FreeSurface(image);
+  SDL::SDL_DestroySurface(image);
 }
 
 Texture::Texture(const FilePath& filename, int px, int py, int w, int h) : path(filename) {
@@ -35,11 +35,11 @@ Texture::Texture(const FilePath& filename, int px, int py, int w, int h) : path(
   SDL::SDL_Rect src{px, py, w, h};
   SDL::SDL_Surface* sub = createSurface(src.w, src.h);
   CHECK(sub) << SDL::SDL_GetError();
-  CHECK(!SDL_BlitSurface(image, &src, sub, &offset)) << SDL::SDL_GetError();
-  SDL::SDL_FreeSurface(image);
+  CHECK(SDL_BlitSurface(image, &src, sub, &offset)) << SDL::SDL_GetError();
+  SDL::SDL_DestroySurface(image);
   if (auto error = loadFromMaybe(sub))
     FATAL << "Couldn't load image: " << *path << ". Error code " << toString(*error);
-  SDL::SDL_FreeSurface(sub);
+  SDL::SDL_DestroySurface(sub);
 }
 
 Texture::Texture(Color color, int width, int height) {
@@ -105,13 +105,14 @@ optional<SDL::GLenum> Texture::loadFromMaybe(SDL::SDL_Surface* imageOrig) {
   CHECK_OPENGL_ERROR();
   int mode = GL_RGB;
   auto image = createPowerOfTwoSurface(imageOrig);
-  if (image->format->BytesPerPixel == 4) {
-    if (image->format->Rmask == 0x000000ff)
+  auto formatDetails = SDL::SDL_GetPixelFormatDetails(image->format);
+  if (formatDetails->bytes_per_pixel == 4) {
+    if (formatDetails->Rmask == 0x000000ff)
       mode = GL_RGBA;
     else
       mode = GL_BGRA;
   } else {
-    if (image->format->Rmask == 0x000000ff)
+    if (formatDetails->Rmask == 0x000000ff)
       mode = GL_RGB;
     else
       mode = GL_BGR;
@@ -126,7 +127,7 @@ optional<SDL::GLenum> Texture::loadFromMaybe(SDL::SDL_Surface* imageOrig) {
   size = Vec2(imageOrig->w, imageOrig->h);
   realSize = Vec2(image->w, image->h);
   if (image != imageOrig)
-    SDL::SDL_FreeSurface(image);
+    SDL::SDL_DestroySurface(image);
   auto error = SDL::glGetError();
   if (error != GL_NO_ERROR)
     return error;
@@ -137,7 +138,7 @@ optional<Texture> Texture::loadMaybe(const FilePath& path) {
   if (SDL::SDL_Surface* image = SDL::IMG_Load(path.getPath())) {
     Texture ret;
     bool ok = !ret.loadFromMaybe(image);
-    SDL::SDL_FreeSurface(image);
+    SDL::SDL_DestroySurface(image);
     if (ok) {
       ret.path = path;
       return std::move(ret);
@@ -151,7 +152,7 @@ void Texture::addTexCoord(int x, int y) const {
 }
 
 SDL::SDL_Surface* Texture::createSurface(int w, int h) {
-  SDL::SDL_Surface* ret = SDL::SDL_CreateRGBSurface(0, w, h, 32, 0x000000FF, 0x0000FF00, 0x00FF0000, 0xFF000000);
+  SDL::SDL_Surface* ret = SDL::SDL_CreateSurface(w, h, SDL::SDL_PIXELFORMAT_RGBA32);
   CHECK(ret) << "Failed to create surface " << w << ":" << h << ": " << SDL::SDL_GetError();
   return ret;
 }
@@ -168,7 +169,7 @@ SDL::SDL_Surface* Texture::createPowerOfTwoSurface(SDL::SDL_Surface* image) {
     return image;
   auto ret = createSurface(w, h);
   SDL::SDL_Rect dst{0, 0, image->w, image->h};
-  SDL::SDL_SetSurfaceBlendMode(image, SDL::SDL_BLENDMODE_NONE);
+  SDL::SDL_SetSurfaceBlendMode(image, SDL_BLENDMODE_NONE);
   SDL_BlitSurface(image, nullptr, ret, &dst);
   // fill the rest of the texture as well, which 'kind-of' solves the problem with repeating textures.
   dst = {image->w, 0, 0, 0};

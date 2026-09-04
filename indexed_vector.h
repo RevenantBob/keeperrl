@@ -11,9 +11,13 @@ class IndexedVector {
       indexes.emplace(elems[i]->getUniqueId(), i);
   }
 
-  IndexedVector(IndexedVector&&) = default;
+  // Explicitly noexcept (rather than relying on implicit deduction): IndexedVector has no
+  // copy constructor, and std::vector growth (MSVC STL) falls back to copying elements during
+  // reallocation unless the move constructor is noexcept, which fails to compile for move-only
+  // element types like this one.
+  IndexedVector(IndexedVector&&) noexcept = default;
 
-  IndexedVector& operator = (IndexedVector&&) = default;
+  IndexedVector& operator = (IndexedVector&&) noexcept = default;
 
   IndexedVector(const vector<T>& e) : elems(e) {
     for (int i: All(elems))

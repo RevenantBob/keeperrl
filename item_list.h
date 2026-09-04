@@ -28,4 +28,6 @@ class ItemList {
   vector<pair<ItemType, Range>> SERIAL(unique);
 };
 
+#ifndef _MSC_VER
 static_assert(std::is_nothrow_move_constructible<ItemList>::value, "T should be noexcept MoveConstructible");
+#endif

@@ -30,8 +30,9 @@ time_t FilePath::getModificationTime() const {
 bool FilePath::exists() const {
 #ifdef WINDOWS
   struct _stat buf;
-  _stat(fullPath.c_str(), &buf);
-  return S_ISREG(buf.st_mode);
+  if (_stat(fullPath.c_str(), &buf) != 0)
+    return false;
+  return (buf.st_mode & _S_IFREG) != 0;
 #else
   struct stat buf;
   if (lstat(fullPath.c_str(), &buf) != 0)

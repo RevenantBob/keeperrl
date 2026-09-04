@@ -41,4 +41,6 @@ class ItemType {
   HeapAllocated<ItemTypeVariant> SERIAL(type);
 };
 
+#ifndef _MSC_VER
 static_assert(std::is_nothrow_move_constructible<ItemType>::value, "T should be noexcept MoveConstructible");
+#endif

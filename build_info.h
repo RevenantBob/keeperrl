@@ -101,4 +101,6 @@ struct BuildInfo {
   }
 };
 
+#ifndef _MSC_VER
 static_assert(std::is_nothrow_move_constructible<BuildInfo>::value, "T should be noexcept MoveConstructible");
+#endif

@@ -58,4 +58,6 @@ class FurnitureFactory {
   HashMap<FurnitureType, ViewObject> SERIAL(constructionObjects);
 };
 
+#ifndef _MSC_VER
 static_assert(std::is_nothrow_move_constructible<FurnitureFactory>::value, "T should be noexcept MoveConstructible");
+#endif

@@ -26,7 +26,7 @@ class ContentFactory;
 class NameGenerator;
 class Encyclopedia;
 class Unlocks;
-class SteamAchievements;
+struct SteamAchievements;
 class ProgressMeter;
 
 struct WarlordInfoWithReference {

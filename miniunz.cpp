@@ -15,13 +15,25 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-//#ifdef unix
+#ifndef WINDOWS
 # include <unistd.h>
 # include <utime.h>
-/*#else
+#else
 # include <direct.h>
 # include <io.h>
-#endif*/
+// Avoid windows.h polluting the global namespace with things that collide with this
+// codebase (a global Rectangle() function, min/max macros breaking std::numeric_limits, etc).
+# ifndef WIN32_LEAN_AND_MEAN
+# define WIN32_LEAN_AND_MEAN
+# endif
+# ifndef NOMINMAX
+# define NOMINMAX
+# endif
+# ifndef NOGDI
+# define NOGDI
+# endif
+# include <windows.h>
+#endif
 
 #include "unzip.h"
 
@@ -57,11 +69,11 @@ void change_file_date(
     uLong dosdate,
     tm_unz tmu_date)
 {
-#ifdef WIN32
+#ifdef WINDOWS
   HANDLE hFile;
   FILETIME ftm,ftLocal,ftCreate,ftLastAcc,ftLastWrite;
 
-  hFile = CreateFile(filename,GENERIC_READ | GENERIC_WRITE,
+  hFile = CreateFileA(filename,GENERIC_READ | GENERIC_WRITE,
                       0,nullptr,OPEN_EXISTING,0,nullptr);
   GetFileTime(hFile,&ftCreate,&ftLastAcc,&ftLastWrite);
   DosDateTimeToFileTime((WORD)(dosdate>>16),(WORD)dosdate,&ftLocal);
@@ -99,7 +111,7 @@ optional<string> mymkdir(
 #ifndef WINDOWS
     if (mkdir (dirname,0775) != 0)
 #else
-    if (mkdir (dirname) != 0)
+    if (_mkdir (dirname) != 0)
 #endif
       return string(strerror(errno));
     else

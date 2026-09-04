@@ -23,27 +23,27 @@ KeybindingMap::KeybindingMap(const FilePath& defaults, const FilePath& user)
 }
 
 static SDL::Uint16 getMod(SDL::Uint16 m) {
-  if (m & SDL::KMOD_RCTRL)
-    m = m | SDL::KMOD_LCTRL;
-  if (m & SDL::KMOD_RSHIFT)
-    m = m | SDL::KMOD_LSHIFT;
-  if (m & SDL::KMOD_RALT)
-    m = m | SDL::KMOD_LALT;
-  return m & (SDL::KMOD_LCTRL | SDL::KMOD_LSHIFT | SDL::KMOD_LALT);
+  if (m & SDL_KMOD_RCTRL)
+    m = m | SDL_KMOD_LCTRL;
+  if (m & SDL_KMOD_RSHIFT)
+    m = m | SDL_KMOD_LSHIFT;
+  if (m & SDL_KMOD_RALT)
+    m = m | SDL_KMOD_LALT;
+  return m & (SDL_KMOD_LCTRL | SDL_KMOD_LSHIFT | SDL_KMOD_LALT);
 }
 
 static SDL::SDL_Keycode getEquivalent(SDL::SDL_Keycode key){
-  if (key == SDL::SDLK_KP_ENTER)
-    return SDL::SDLK_RETURN;
+  if (key == SDLK_KP_ENTER)
+    return SDLK_RETURN;
   return key;
 }
 
 optional<SDL::SDL_Keycode> KeybindingMap::getBuiltinMapping(Keybinding key) {
   static HashMap<Keybinding, SDL::SDL_Keycode> bindings {
-    {Keybinding("MENU_UP"), SDL::SDLK_KP_8},
-    {Keybinding("MENU_DOWN"), SDL::SDLK_KP_2},
-    {Keybinding("MENU_LEFT"), SDL::SDLK_KP_4},
-    {Keybinding("MENU_RIGHT"), SDL::SDLK_KP_6},
+    {Keybinding("MENU_UP"), SDLK_KP_8},
+    {Keybinding("MENU_DOWN"), SDLK_KP_2},
+    {Keybinding("MENU_LEFT"), SDLK_KP_4},
+    {Keybinding("MENU_RIGHT"), SDLK_KP_6},
   };
   return getValueMaybe(bindings, key);
 }
@@ -85,67 +85,67 @@ bool KeybindingMap::matches(Keybinding key, SDL::SDL_Keysym sym) {
 }
 
 static const map<string, SDL::SDL_Keycode> keycodes {
-  {"A", SDL::SDLK_a},
-  {"B", SDL::SDLK_b},
-  {"C", SDL::SDLK_c},
-  {"D", SDL::SDLK_d},
-  {"E", SDL::SDLK_e},
-  {"F", SDL::SDLK_f},
-  {"G", SDL::SDLK_g},
-  {"H", SDL::SDLK_h},
-  {"I", SDL::SDLK_i},
-  {"J", SDL::SDLK_j},
-  {"K", SDL::SDLK_k},
-  {"L", SDL::SDLK_l},
-  {"M", SDL::SDLK_m},
-  {"N", SDL::SDLK_n},
-  {"O", SDL::SDLK_o},
-  {"P", SDL::SDLK_p},
-  {"Q", SDL::SDLK_q},
-  {"R", SDL::SDLK_r},
-  {"S", SDL::SDLK_s},
-  {"T", SDL::SDLK_t},
-  {"U", SDL::SDLK_u},
-  {"V", SDL::SDLK_v},
-  {"W", SDL::SDLK_w},
-  {"X", SDL::SDLK_x},
-  {"Y", SDL::SDLK_y},
-  {"Z", SDL::SDLK_z},
-  {"0", SDL::SDLK_0},
-  {"1", SDL::SDLK_1},
-  {"2", SDL::SDLK_2},
-  {"3", SDL::SDLK_3},
-  {"4", SDL::SDLK_4},
-  {"5", SDL::SDLK_5},
-  {"6", SDL::SDLK_6},
-  {"7", SDL::SDLK_7},
-  {"8", SDL::SDLK_8},
-  {"9", SDL::SDLK_9},
-  {"KEYPAD0", SDL::SDLK_KP_0},
-  {"KEYPAD1", SDL::SDLK_KP_1},
-  {"KEYPAD2", SDL::SDLK_KP_2},
-  {"KEYPAD3", SDL::SDLK_KP_3},
-  {"KEYPAD4", SDL::SDLK_KP_4},
-  {"KEYPAD5", SDL::SDLK_KP_5},
-  {"KEYPAD6", SDL::SDLK_KP_6},
-  {"KEYPAD7", SDL::SDLK_KP_7},
-  {"KEYPAD8", SDL::SDLK_KP_8},
-  {"KEYPAD9", SDL::SDLK_KP_9},
-  {"SPACE", SDL::SDLK_SPACE},
-  {"COMMA", SDL::SDLK_COMMA},
-  {"DELETE", SDL::SDLK_DELETE},
-  {"SLASH", SDL::SDLK_SLASH},
-  {"BACKSLASH", SDL::SDLK_BACKSLASH},
-  {"SEMICOLON", SDL::SDLK_SEMICOLON},
-  {"PAGEUP", SDL::SDLK_PAGEUP},
-  {"PAGEDOWN", SDL::SDLK_PAGEDOWN},
-  {"PERIOD", SDL::SDLK_PERIOD},
-  {"UP", SDL::SDLK_UP},
-  {"DOWN", SDL::SDLK_DOWN},
-  {"LEFT", SDL::SDLK_LEFT},
-  {"RIGHT", SDL::SDLK_RIGHT},
-  {"ESCAPE", SDL::SDLK_ESCAPE},
-  {"ENTER", SDL::SDLK_RETURN},
+  {"A", SDLK_A},
+  {"B", SDLK_B},
+  {"C", SDLK_C},
+  {"D", SDLK_D},
+  {"E", SDLK_E},
+  {"F", SDLK_F},
+  {"G", SDLK_G},
+  {"H", SDLK_H},
+  {"I", SDLK_I},
+  {"J", SDLK_J},
+  {"K", SDLK_K},
+  {"L", SDLK_L},
+  {"M", SDLK_M},
+  {"N", SDLK_N},
+  {"O", SDLK_O},
+  {"P", SDLK_P},
+  {"Q", SDLK_Q},
+  {"R", SDLK_R},
+  {"S", SDLK_S},
+  {"T", SDLK_T},
+  {"U", SDLK_U},
+  {"V", SDLK_V},
+  {"W", SDLK_W},
+  {"X", SDLK_X},
+  {"Y", SDLK_Y},
+  {"Z", SDLK_Z},
+  {"0", SDLK_0},
+  {"1", SDLK_1},
+  {"2", SDLK_2},
+  {"3", SDLK_3},
+  {"4", SDLK_4},
+  {"5", SDLK_5},
+  {"6", SDLK_6},
+  {"7", SDLK_7},
+  {"8", SDLK_8},
+  {"9", SDLK_9},
+  {"KEYPAD0", SDLK_KP_0},
+  {"KEYPAD1", SDLK_KP_1},
+  {"KEYPAD2", SDLK_KP_2},
+  {"KEYPAD3", SDLK_KP_3},
+  {"KEYPAD4", SDLK_KP_4},
+  {"KEYPAD5", SDLK_KP_5},
+  {"KEYPAD6", SDLK_KP_6},
+  {"KEYPAD7", SDLK_KP_7},
+  {"KEYPAD8", SDLK_KP_8},
+  {"KEYPAD9", SDLK_KP_9},
+  {"SPACE", SDLK_SPACE},
+  {"COMMA", SDLK_COMMA},
+  {"DELETE", SDLK_DELETE},
+  {"SLASH", SDLK_SLASH},
+  {"BACKSLASH", SDLK_BACKSLASH},
+  {"SEMICOLON", SDLK_SEMICOLON},
+  {"PAGEUP", SDLK_PAGEUP},
+  {"PAGEDOWN", SDLK_PAGEDOWN},
+  {"PERIOD", SDLK_PERIOD},
+  {"UP", SDLK_UP},
+  {"DOWN", SDLK_DOWN},
+  {"LEFT", SDLK_LEFT},
+  {"RIGHT", SDLK_RIGHT},
+  {"ESCAPE", SDLK_ESCAPE},
+  {"ENTER", SDLK_RETURN},
 };
 
 TString KeybindingMap::getText(SDL::SDL_Keysym sym, string delimiter) {
@@ -156,11 +156,11 @@ TString KeybindingMap::getText(SDL::SDL_Keysym sym, string delimiter) {
     return ret;
   }();
   TString ret = keys.at(sym.sym);
-  if (sym.mod & SDL::KMOD_LCTRL)
+  if (sym.mod & SDL_KMOD_LCTRL)
     ret = TSentence("KEY_MODIFIER", TString("Ctrl"_s), ret);
-  if (sym.mod & SDL::KMOD_LSHIFT)
+  if (sym.mod & SDL_KMOD_LSHIFT)
     ret = TSentence("KEY_MODIFIER", TString("Shift"_s), ret);
-  if (sym.mod & SDL::KMOD_LALT)
+  if (sym.mod & SDL_KMOD_LALT)
     ret = TSentence("KEY_MODIFIER", TString("Alt"_s), ret);
   return ret;
 }
@@ -204,11 +204,11 @@ string KeybindingMap::getString(SDL::SDL_Keysym sym) {
     return ret;
   }();
   string ret = keys.at(sym.sym);
-  if (sym.mod & SDL::KMOD_LCTRL)
+  if (sym.mod & SDL_KMOD_LCTRL)
     ret = "ctrl " + ret;
-  if (sym.mod & SDL::KMOD_LSHIFT)
+  if (sym.mod & SDL_KMOD_LSHIFT)
     ret = "shift " + ret;
-  if (sym.mod & SDL::KMOD_LALT)
+  if (sym.mod & SDL_KMOD_LALT)
     ret = "alt " + ret;
   return ret;
 }
@@ -252,11 +252,11 @@ void serialize(PrettyInputArchive& ar, SDL::SDL_Keysym& sym) {
     string s;
     ar.readText(s);
     if (lowercase(s) == "ctrl")
-      sym.mod = sym.mod | SDL::KMOD_LCTRL;
+      sym.mod = sym.mod | SDL_KMOD_LCTRL;
     else if (lowercase(s) == "shift")
-      sym.mod = sym.mod | SDL::KMOD_LSHIFT;
+      sym.mod = sym.mod | SDL_KMOD_LSHIFT;
     else if (lowercase(s) == "alt")
-      sym.mod = sym.mod | SDL::KMOD_LALT;
+      sym.mod = sym.mod | SDL_KMOD_LALT;
     else if (auto code = getValueMaybe(keycodes, s)) {
       sym.sym = *code;
       break;

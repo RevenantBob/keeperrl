@@ -1,5 +1,7 @@
 #include "stdafx.h"
+#ifndef WINDOWS
 #include "dirent.h"
+#endif
 #include "sound_library.h"
 #include "sound.h"
 #include "options.h"

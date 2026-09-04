@@ -4,11 +4,6 @@
 #include <limits>
 #include <utility>
 
-#ifdef OSX
-void sincosf(float a, float* sin, float* cos);
-#endif
-
-
 namespace fx {
 
 struct NoAssertsTag {};
@@ -29,9 +24,8 @@ inline float degToRad(float v) { return v * (2.0f * fconstant::pi / 360.0f); }
 inline float radToDeg(float v) { return v * (360.0 / (2.0 * fconstant::pi)); }
 
 inline std::pair<float, float> sincos(float radians) {
-  std::pair<float, float> out;
-  ::sincosf(radians, &out.first, &out.second);
-  return out;
+  // sincosf() is a GNU libm extension, not portable (missing on MSVC/clang-cl and OSX).
+  return {std::sin(radians), std::cos(radians)};
 }
 
 // Return angle in range (0; 2 * PI)
